@@ -1,0 +1,28 @@
+{
+  "name": "tradin-app-backend",
+  "version": "1.0.0",
+  "description": "Node.js API for products with category, cycle, income calculation, and badges",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "node",
+    "express",
+    "mongoose",
+    "api",
+    "products"
+  ],
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "mongoose": "^8.7.0",
+    "multer": "^2.0.2",
+    "path": "^0.12.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
