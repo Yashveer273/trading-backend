@@ -1,9 +1,11 @@
 const express = require("express");
 const QR = require("../models/QRs");
 const Payment = require("../models/payment");
-
+const path = require("path");
+const fs = require("fs");
 const multer = require("multer");
 const QRPayRourter = express.Router();
+const mediaDir = path.join(__dirname, "../QRuploads");
 
 // Multer setup
 const storage = multer.diskStorage({
@@ -115,88 +117,6 @@ QRPayRourter.get("/api/qrs", async (req, res) => {
   }
 });
 
-QRPayRourter.get("/test", (req, res) => {
-  res.send(`<!DOCTYPE html>
-<html>
-<head>
-<title>QR & Payment API Tester</title>
-</head>
-<body>
-<h1>QR & Payment API Tester</h1>
 
-<h2>Upload QR</h2>
-<form id="uploadForm" enctype="multipart/form-data">
-<input type="file" name="qr" />
-<button type="submit">Upload</button>
-</form>
-<pre id="uploadResult"></pre>
-
-<h2>Get Random QR</h2>
-<button onclick="getRandomQR()">Fetch Random QR</button>
-<pre id="randomQR"></pre>
-
-<h2>Create Payment</h2>
-<form id="paymentForm">
-<input type="text" name="userId" placeholder="User ID" required />
-<input type="number" name="amount" placeholder="Amount" required />
-<input type="text" name="utr" placeholder="UTR" required />
-<input type="text" name="qrImageName" placeholder="QR Image Filename" required />
-<button type="submit">Create Payment</button>
-</form>
-<pre id="paymentResult"></pre>
-
-<h2>Admin: Pending Payments</h2>
-<button onclick="getPending()">Fetch Pending</button>
-<div id="pending"></div>
-
-<script>
-// Upload QR
-uploadForm.onsubmit = async (e) => {
-  e.preventDefault();
-  const formData = new FormData(e.target);
-  const res = await fetch('/QR/api/upload', { method: 'POST', body: formData });
-  document.getElementById('uploadResult').textContent = JSON.stringify(await res.json(), null, 2);
-};
-
-// Random QR
-function getRandomQR() {
-  fetch('/QR/api/qr/random').then(r => r.json()).then(data => document.getElementById('randomQR').textContent = JSON.stringify(data, null, 2));
-}
-
-// Create Payment
-paymentForm.onsubmit = async (e) => {
-  e.preventDefault();
-  const payload = Object.fromEntries(new FormData(e.target).entries());
-  payload.amount = Number(payload.amount);
-  const res = await fetch('/QR/api/payments', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-  document.getElementById('paymentResult').textContent = JSON.stringify(await res.json(), null, 2);
-};
-
-// Fetch Pending Payments
-async function getPending() {
-  const res = await fetch('/QR/api/admin/pending');
-  const data = await res.json();
-  const container = document.getElementById('pending');
-  container.innerHTML='';
-  data.forEach(p=>{
-    const div = document.createElement('div');
-    div.innerHTML = \`<p><b>User:</b> \${p.userId}, <b>Amount:</b> \${p.amount}, <b>UTR:</b> \${p.utr}</p>
-    <img src='\${p.qrUrl}' width='150'/><br>
-    <button onclick="updateStatus('\${p._id}', true)">Approve</button>
-    <button onclick="updateStatus('\${p._id}', false)">Reject</button><hr>\`;
-    container.appendChild(div);
-  });
-}
-
-// Approve/Reject Payment
-async function updateStatus(id, status){
-  const res = await fetch('/QR/api/admin/payments/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({approved:status})});
-  alert('Updated: '+JSON.stringify(await res.json()));
-  getPending();
-}
-</script>
-</body>
-</html>`);
-});
 
 module.exports = QRPayRourter;
