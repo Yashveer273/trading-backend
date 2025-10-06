@@ -8,7 +8,7 @@ const giftRourter = express.Router();
  * Create a new giftcode
  */
 giftRourter.post("/add", async (req, res) => {
-    console.log("KKKK");
+
   try {
     const { creator, amount, users, newUsersOnly, expiry } = req.body;
 

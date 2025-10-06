@@ -1,62 +1,122 @@
 const express = require("express");
 const User = require("../models/user");
-const Purchase = require("../models/purchase");
+const jwt = require('jsonwebtoken');
 
 const UserRouter = express.Router();
-
+const SECRET_KEY="SECRET_KEY12356789";
 // GET all users
+
 UserRouter.get("/", async (req, res) => {
   try {
-    const users = await User.find().populate("referredBy", "phone referralCode");
-    const data = await Promise.all(users.map(async user => {
-      const purchases = await Purchase.find({ user: user._id });
-      const totalBuy = purchases.reduce((sum, p) => sum + p.amount, 0);
-      return {
-        _id: user._id,
-        phone: user.phone,
-        referredBy: user.referredBy?.phone || "-",
-        stage: user.stage,
-        totalBuy,
-        balance: user.balance,
-      };
-    }));
-    res.json(data);
+    const users = await User.find().populate("referredBy", "phone");
+    res.status(200).json({ success: true, users });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 });
-
-// ✅ Get team of a user
-UserRouter.get("/:id/team", async (req, res) => {
+UserRouter.get("/user", async (req, res) => {
+  const {userId}=req.query;
   try {
-    const user = await User.findById(req.params.id).populate("referrals.person", "phone referralCode");
+    const users = await User.findById(userId);
+    res.status(200).json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+// Direct team (Stage 1)
+UserRouter.get("/:userId/direct-team", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).populate("referrals.person", "phone");
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-    // Transform team data
-    const teamData = user.referrals.map((r) => ({
-      phone: r.ids[0]?.phone || "N/A",
-      stage: r.stage,
-      totalBuy: r.totalRecharge || 0,
-      purchaseHistory: [], // later: link to real purchases
-      balance: 0, // placeholder
-      profit: r.totalCommission || 0,
-    }));
+    const directTeam = user.referrals
+      .filter(r => r.stage === 1)
+      .map(r => ({
+        phone: r.person?.phone || "-",
+        stage: r.stage,
+        totalCommission: r.totalCommission || 0,
+      }));
 
-    res.json(teamData);
+    res.status(200).json({ success: true, team: directTeam });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
+// Indirect team (Stage 2 & 3)
+UserRouter.get("/:userId/indirect-team", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).populate("referrals.person", "phone");
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    const indirectTeam = user.referrals
+      .filter(r => r.stage === 2 || r.stage === 3)
+      .map(r => ({
+        phone: r.person?.phone || "-",
+        stage: r.stage,
+        totalCommission: r.totalCommission || 0,
+      }));
+
+    res.status(200).json({ success: true, team: indirectTeam });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Get Withdraw Limit
+UserRouter.get("/:userId/withdraw-limit", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    res.status(200).json({
+      success: true,
+      withdrawLimit: user.withdrawLimit,
+      balance: user.balance,
+    });
+  } catch (err) {
+    console.error("Withdraw Limit Error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Update Withdraw Limit (Admin / Testing)
+UserRouter.put("/:userId/withdraw-limit", async (req, res) => {
+  try {
+    const { limit } = req.body;
+    if (!limit) return res.status(400).json({ success: false, message: "Limit is required" });
+
+    const user = await User.findByIdAndUpdate(
+      req.params.userId,
+      { withdrawLimit: limit },
+      { new: true }
+    );
+
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    res.status(200).json({
+      success: true,
+      message: "Withdraw limit updated",
+      withdrawLimit: user.withdrawLimit,
+    });
+  } catch (err) {
+    console.error("Update Withdraw Limit Error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+
+
+// POST /api/auth/register
 const generateReferralCode = () =>
   Math.random().toString(36).substr(2, 6).toUpperCase();
 
 const COMMISSION_RATES = { 1: 10, 2: 5, 3: 2 };
 
-// POST /api/auth/register
 UserRouter.post("/register", async (req, res) => {
   try {
-    const { phone, password, refCode } = req.body;
+    const { phone, password, refCode,tradePassword } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ phone });
@@ -78,7 +138,8 @@ UserRouter.post("/register", async (req, res) => {
       stage: 0,
       referredBy: null,
       referrals: [],
-      token, // store token
+      token, 
+      tradePassword
     });
     await newUser.save();
 

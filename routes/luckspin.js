@@ -61,26 +61,36 @@ luckySpinRouter.get("/items", async (req, res) => {
 });
 
 /**
- * GET single item by id
+ * GET single item 
  */
-luckySpinRouter.get("/item", async (req, res) => {
+// luckySpinRouter.js
+luckySpinRouter.get("/spinItem", async (req, res) => {
   try {
-    // Get top 8 items by priority (ascending = higher priority first)
-    const topItems = await Item.find().sort({ priority: 1, createdAt: -1 }).limit(8);
+    const allItems = await Item.find().sort({ priority: 1, createdAt: -1 });
+    if (!allItems.length) return res.status(404).json({ error: "No items found" });
 
-    if (topItems.length === 0) {
-      return res.status(404).json({ error: "No items found" });
+    const topCount = Math.min(7, allItems.length); // top 7 high-priority items
+    const highPriorityItems = allItems.slice(0, topCount);
+    const remainingItems = allItems.slice(topCount); // rest
+
+    // Weighted random: 70% chance pick from highPriority, 30% chance pick from remaining
+    const rand = Math.random();
+
+    let selectedItem;
+    if (rand < 0.7 || remainingItems.length === 0) {
+      // pick from high priority
+      selectedItem = highPriorityItems[Math.floor(Math.random() * highPriorityItems.length)];
+    } else {
+      // pick from remaining items
+      selectedItem = remainingItems[Math.floor(Math.random() * remainingItems.length)];
     }
-
-    // Pick a random item from the top 8
-    const randomIndex = Math.floor(Math.random() * topItems.length);
-    const selectedItem = topItems[randomIndex];
 
     res.status(200).json(selectedItem);
   } catch (error) {
     res.status(500).json({ error: "Server error", details: error.message });
   }
 });
+
 
 /**
  * UPDATE item by id

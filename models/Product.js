@@ -7,11 +7,12 @@ const productSchema = new mongoose.Schema(
     price: { type: Number, required: true },
     cycleType: { type: String, enum: ["day", "hour"], required: true },
     cycleValue: { type: Number, required: true },
-    daily: { type: Number, default: 0 }, // daily income
-    hour: { type: Number, default: 0 },  // hourly income
-    totalIncomeDay: { type: Number, default: 0 },  // auto-calculated
-    totalIncomeHour: { type: Number, default: 0 }, // auto-calculated
-    imageUrl: { type: String, default: "" },       // path to uploaded image
+    daily: { type: Number, default: 0 },
+    hour: { type: Number, default: 0 },  
+    totalIncomeDay: { type: Number, default: 0 },  
+    totalIncomeHour: { type: Number, default: 0 },
+    imageUrl: { type: String, default: "" },  
+    purchaseType: { type: String, default: "One time buy" } ,   
     badge: {
       type: String,
       enum: ["non", "popular", "limited", "new"],

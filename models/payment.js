@@ -5,10 +5,11 @@ const mongoose = require("mongoose");
 const PaymentSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   amount: { type: Number, required: true },
-  utr: { type: String, required: true },
+  utr: { type: String, required: true,unique: true, },
   qrImageName: { type: String, required: true },
-  approved: { type: Boolean, default: false },
-  remarks: { type: String },
+  approved: { type: String, default: "Pending" },
+  
+ 
   createdAt: { type: Date, default: Date.now },
 });
 module.exports = mongoose.model("Payment", PaymentSchema);

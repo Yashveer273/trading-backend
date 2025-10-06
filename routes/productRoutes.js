@@ -10,7 +10,6 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadDir); // save files to the uploads folder
@@ -22,14 +21,12 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-
-
 // ---------------- CREATE product ----------------
 router.post("/add", upload.single("image"), async (req, res) => {
-  console.log(req.body);
+ 
  
   try {
-    const { categoryName, productName, price, cycleType, cycleValue, daily, hour, badge } = req.body;
+    const { categoryName, productName, price, cycleType, cycleValue, daily, hour,purchaseType, badge } = req.body;
 
     let imageUrl = "";
     if (req.file) {
@@ -45,6 +42,7 @@ router.post("/add", upload.single("image"), async (req, res) => {
       daily: Number(daily) || 0,
       hour: Number(hour) || 0,
       imageUrl,
+      purchaseType,
       badge,
     });
 
@@ -56,12 +54,15 @@ router.post("/add", upload.single("image"), async (req, res) => {
   }
 });
 
+
 // ---------------- GET all products ----------------
 router.get("/", async (req, res) => {
   try {
+    
     const limit = req.query.limit ? parseInt(req.query.limit) : 0;
     const products = await Product.find({}).limit(limit);
-    res.json({ success: true, products });
+
+    res.status(200).json({ success: true, products });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -71,7 +72,10 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+    if (!product)
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     res.json({ success: true, product });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -80,8 +84,9 @@ router.get("/:id", async (req, res) => {
 
 // ---------------- UPDATE product ----------------
 router.put("/:id", upload.single("image"), async (req, res) => {
+  
   try {
-    const { categoryName, productName, price, cycleType, cycleValue, daily, hour, badge } = req.body;
+    const { categoryName, productName, price, cycleType, cycleValue, daily, hour,purchaseType, badge } = req.body;
 
     let updateData = {
       categoryName,
@@ -91,6 +96,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
       cycleValue,
       daily: Number(daily) || 0,
       hour: Number(hour) || 0,
+      purchaseType,
       badge,
     };
 
@@ -115,7 +121,10 @@ router.put("/:id", upload.single("image"), async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const deletedProduct = await Product.findByIdAndDelete(req.params.id);
-    if (!deletedProduct) return res.status(404).json({ success: false, message: "Product not found" });
+    if (!deletedProduct)
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     res.json({ success: true, message: "Product deleted successfully" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
