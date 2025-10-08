@@ -330,7 +330,7 @@ UserRouter.get("/team-overview", async (req, res) => {
   }
 });
 
-// GET API: fetch team array for a specific level
+// GET API fetch team array for a specific level
 UserRouter.get("/team-level", async (req, res) => {
   try {
     const { _id, level } = req.query;
