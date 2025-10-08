@@ -12,20 +12,22 @@ connectDB();
 const productRoutes = require("./routes/productRoutes");
 const giftRouter = require("./routes/giftRourter");
 const userRouter = require("./routes/userRoutes");
-const QRPayRourter = require("./routes/QRPay");
+const QRPayRourter = require("./routes/QRPay-and-buy-product");
 const luckySpinRouter = require("./routes/luckspin");
-const PurchaseRouter = require("./routes/purchaseRoutes");
-const withdrawRoute = require("./routes/withdrawRoutes");
 
+const withdrawRoute = require("./routes/withdrawRoutes");
+const commissionRouter=require("./routes/CommissionRoutes");
+const ClaimRoiRouter= require("./routes/claimROI");
 
 
 app.use("/api/products", productRoutes);
 app.use("/api/giftcodes", giftRouter);
 app.use("/api/users", userRouter);
-app.use("/QR", QRPayRourter);
+app.use("/QR", QRPayRourter);// --- API 3: buy product  ---
 app.use("/api/luckySpin", luckySpinRouter);
-app.use("/api/purchase", PurchaseRouter);
+app.use("/api/claimROI",ClaimRoiRouter);
 app.use("/api/withdraw", withdrawRoute);
+app.use("/api/commission", commissionRouter);
 
 
 app.use("/uploads", express.static(path.join(__dirname, "routes/uploads")));

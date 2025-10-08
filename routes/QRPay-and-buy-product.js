@@ -9,7 +9,7 @@ const mediaDir = path.join(__dirname, "../QRuploads");
 const User = require("../models/user");
 const Purchase = require("../models/purchase");
 const withdraw = require("../models/Withdraw");
-
+const commissionRates= require("../models/Commission");
 // Multer setup
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -66,20 +66,13 @@ QRPayRourter.get("/api/qr/random", async (req, res) => {
 QRPayRourter.post("/api/payments", async (req, res) => {
   try {
     const { userId, quantity, product, TotalAmount } = req.body;
-    if (
-      !product
-    ) {
+    if (!product) {
       return res.status(400).json({ error: "Missing fields" });
     }
-    const { _id, purchaseType,productName,price,cycleType,cycleValue } = product;
-  
-    if (
-      
-    
-     
-      !_id ||
-      !purchaseType
-    ) {
+    const { _id, purchaseType, productName, price, cycleType, cycleValue } =
+      product;
+
+    if (!_id || !purchaseType) {
       return res.status(400).json({ error: "Missing fields" });
     }
 
@@ -91,9 +84,7 @@ QRPayRourter.post("/api/payments", async (req, res) => {
     }
     if (
       purchaseType === "One time buy" &&
-      [...user.purchases]
-        .reverse()
-        .some((p) => p.productId.toString() === _id)
+      [...user.purchases].reverse().some((p) => p.productId.toString() === _id)
     ) {
       return res.status(409).json({
         success: false,
@@ -101,19 +92,20 @@ QRPayRourter.post("/api/payments", async (req, res) => {
       });
     }
     // Create payment record
-    
 
     // Prepare purchase object
     const purchase = {
       productName,
-      amount:price,
+      amount: price,
       TotalAmount,
       quantity,
-      productId:_id,
+      productId: _id,
       cycleType,
       cycleValue,
-      dailyIncome:  product.cycleType === "hour" ? product.hour : product.daily,
+      dailyIncome: product.cycleType === "hour" ? product.hour : product.daily,
       purchaseType,
+      claim: "waiting",
+      claimedCycles:[],
       createdAt: new Date(),
     };
 
@@ -121,25 +113,63 @@ QRPayRourter.post("/api/payments", async (req, res) => {
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       {
-        $inc: { totalBuy: TotalAmount, balance: -TotalAmount },
+        $inc: { totalBuy: TotalAmount, balance: -TotalAmount,pendingIncome:TotalAmount },
         $push: { purchases: purchase },
       },
       { new: true } // return the updated document
     );
-const purchas = new Purchase({
+    const purchas = new Purchase({
       userId,
       productName,
-      amount:price,
+      amount: price,
       TotalAmount,
       quantity,
-      productId:_id,
+      productId: _id,
       purchaseType,
       cycleType,
-      cycleDuration:cycleValue,
-      dailyIncome:  product.cycleType === "hour" ? product.hour : product.daily,
+      cycleDuration: cycleValue,
+      dailyIncome: product.cycleType === "hour" ? product.hour : product.daily,
     });
 
     await purchas.save();
+
+    // ------------------------------ commission-----------------
+let currentUserId = user._id; // purchasing user
+const levels = ["team1", "team2", "team3"];
+
+for (let i = 0; i < levels.length; i++) {
+  // 1️⃣ Check if current user has a referrer
+  const currentUser = await User.findById(currentUserId, "referredBy");
+  if (!currentUser?.referredBy?.refCode) break;
+
+  const uplineRefCode = currentUser.referredBy.refCode;
+  const teamField = levels[i];
+  const rate = commissionRates[`level${i + 1}`] || 0;
+  const commission = (TotalAmount * rate) / 100;
+
+  // 2️⃣ Update totalRecharge & totalCommission for the matching ids entry
+   await User.updateOne(
+    { 
+      referralCode: uplineRefCode,
+      [`${teamField}.ids.person`]: currentUserId.toString()
+    },
+    {
+      $inc: {
+        [`${teamField}.$.totalRecharge`]: TotalAmount,
+        [`${teamField}.$.totalCommission`]: commission,
+        pendingIncome: commission,
+      }
+    }
+  );
+
+  // 3️⃣ Move up: set currentUserId to upline for next level
+  const upline = await User.findOne({ referralCode: uplineRefCode }, "_id referredBy");
+  if (!upline) break;
+
+  currentUserId = upline._id;
+}
+
+     
     return res.json({ success: true, balance: updatedUser.balance });
   } catch (err) {
     console.error(err);
@@ -188,7 +218,7 @@ QRPayRourter.patch("/api/admin/payments/:id", async (req, res) => {
 QRPayRourter.post("/api/recharge", async (req, res) => {
   try {
     const { userId, amount, utr, qrImageName } = req.body;
-
+console.log(req.body);
     if (!userId || !amount || !utr || !qrImageName) {
       return res.status(400).json({ error: "Missing fields" });
     }
@@ -232,16 +262,13 @@ QRPayRourter.get("/recharge-list", async (req, res) => {
 
     const total = await Payment.countDocuments();
 
-   
     res.status(200).json({
       success: true,
       message: "Transactions and stats fetched successfully",
       currentPage: page,
       totalPages: Math.ceil(total / limit),
-     
-      data: transactions,
 
-     
+      data: transactions,
     });
   } catch (error) {
     console.error("Error fetching transactions:", error);
@@ -269,7 +296,6 @@ QRPayRourter.get("/api/qrs", async (req, res) => {
   }
 });
 
-
 // ✅ Get paginated purchases + withdraw/recharge stats
 QRPayRourter.get("/product-purchase-list", async (req, res) => {
   try {
@@ -286,7 +312,6 @@ QRPayRourter.get("/product-purchase-list", async (req, res) => {
 
     const total = await Purchase.countDocuments();
 
-   
     res.status(200).json({
       success: true,
       message: "Transactions and stats fetched successfully",
@@ -294,8 +319,6 @@ QRPayRourter.get("/product-purchase-list", async (req, res) => {
       totalPages: Math.ceil(total / limit),
       totalRecords: total,
       data: transactions,
-
-     
     });
   } catch (error) {
     console.error("Error fetching transactions:", error);
@@ -339,48 +362,48 @@ QRPayRourter.get("/transaction-stats", async (req, res) => {
     });
 
     // ---------- Recharge Stats ----------
-const rechargeData = await Payment.aggregate([
-  {
-    $group: {
-      _id: "$approved", // will be "Approve", "Pending", "Reject", etc.
-      totalAmount: { $sum: "$amount" },
-      count: { $sum: 1 },
-    },
-  },
-]);
+    const rechargeData = await Payment.aggregate([
+      {
+        $group: {
+          _id: "$approved", // will be "Approve", "Pending", "Reject", etc.
+          totalAmount: { $sum: "$amount" },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
 
-let totalRechargeApprovedAmount = 0;
-let totalRechargeApprovedCases = 0;
-let totalRechargePendingAmount = 0;
-let totalRechargePendingCases = 0;
-let totalRechargeRejectedAmount = 0;
-let totalRechargeRejectedCases = 0;
+    let totalRechargeApprovedAmount = 0;
+    let totalRechargeApprovedCases = 0;
+    let totalRechargePendingAmount = 0;
+    let totalRechargePendingCases = 0;
+    let totalRechargeRejectedAmount = 0;
+    let totalRechargeRejectedCases = 0;
 
-rechargeData.forEach((item) => {
-  switch (item._id) {
-    case "Approve":
-      totalRechargeApprovedAmount = item.totalAmount;
-      totalRechargeApprovedCases = item.count;
-      break;
-    case "Pending":
-      totalRechargePendingAmount = item.totalAmount;
-      totalRechargePendingCases = item.count;
-      break;
-    case "Reject":
-      totalRechargeRejectedAmount = item.totalAmount;
-      totalRechargeRejectedCases = item.count;
-      break;
-  }
-});
+    rechargeData.forEach((item) => {
+      switch (item._id) {
+        case "Approve":
+          totalRechargeApprovedAmount = item.totalAmount;
+          totalRechargeApprovedCases = item.count;
+          break;
+        case "Pending":
+          totalRechargePendingAmount = item.totalAmount;
+          totalRechargePendingCases = item.count;
+          break;
+        case "Reject":
+          totalRechargeRejectedAmount = item.totalAmount;
+          totalRechargeRejectedCases = item.count;
+          break;
+      }
+    });
 
-console.log({
-  totalRechargeApprovedAmount,
-  totalRechargeApprovedCases,
-  totalRechargePendingAmount,
-  totalRechargePendingCases,
-  totalRechargeRejectedAmount,
-  totalRechargeRejectedCases,
-});
+    console.log({
+      totalRechargeApprovedAmount,
+      totalRechargeApprovedCases,
+      totalRechargePendingAmount,
+      totalRechargePendingCases,
+      totalRechargeRejectedAmount,
+      totalRechargeRejectedCases,
+    });
 
     // ---------- Send Response ----------
     res.status(200).json({
