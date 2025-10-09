@@ -363,4 +363,28 @@ UserRouter.get("/team-level", async (req, res) => {
   }
 });
 
+UserRouter.get("/account_data", async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    const user = await User.findById(userId).select(
+      "totalBuy pendingIncome productIncome tasksReward Withdrawal balance"
+    );
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    return res.json({
+      success: true,
+      message: "User account data fetched successfully",
+      data: user
+    });
+  } catch (error) {
+    console.error("Error fetching finance data:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+
 module.exports = UserRouter;
