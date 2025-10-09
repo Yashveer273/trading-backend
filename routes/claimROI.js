@@ -54,7 +54,7 @@ console.log(req.body);
     // Optionally, update balance or PendingIncome
     await User.updateOne(
       { _id: userId },
-      { $inc: { balance: claimAmount, PendingIncome: -claimAmount } }
+      { $inc: { Withdrawal: claimAmount} }
     );
 
     res.json({ success: true, message: `Cycle ${cycleIndex} claimed for ₹${claimAmount}` });

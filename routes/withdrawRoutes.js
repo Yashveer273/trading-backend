@@ -19,7 +19,7 @@ router.post("/", async (req, res) => {
       _id: userId,
       tradePassword: tradePassword,           // validate trade password directly in query
       "bankDetails.accountNumber": { $exists: true, $ne: "" }, // ensure bank info exists
-      balance: { $gte: amount },              // sufficient balance
+      Withdrawal: { $gte: amount },              // sufficient balance
       withdrawLimit: { $gte: amount },        // within withdraw limit
     });
 
@@ -34,7 +34,7 @@ router.post("/", async (req, res) => {
     // 🟢 Deduct balance atomically
    await User.updateOne(
       { _id: userId },
-      { $inc: { balance: -amount } } // decrement balance
+      { $inc: { Withdrawal: -amount } } // decrement balance
     );
 
     // 🟢 Save withdrawal request

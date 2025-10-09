@@ -113,7 +113,7 @@ QRPayRourter.post("/api/payments", async (req, res) => {
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       {
-        $inc: { totalBuy: TotalAmount, balance: -TotalAmount,pendingIncome:TotalAmount },
+        $inc: { totalBuy: TotalAmount, balance: -TotalAmount },
         $push: { purchases: purchase },
       },
       { new: true } // return the updated document
@@ -158,6 +158,7 @@ for (let i = 0; i < levels.length; i++) {
         [`${teamField}.$.totalRecharge`]: TotalAmount,
         [`${teamField}.$.totalCommission`]: commission,
         pendingIncome: commission,
+        Withdrawal:TotalAmount
       }
     }
   );

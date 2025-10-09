@@ -37,7 +37,7 @@ const userSchema = new mongoose.Schema({
   pendingIncome: { type: Number, default: 0 },
   productIncome: { type: Number, default: 0 },
   tasksReward: { type: Number, default: 0 },
-
+  Withdrawal:{ type: Number, default: 0 },
   balance: { type: Number, default: 0 },
   withdrawLimit:{ type: Number, default: 1000 },
   purchases: { type: Array, default: [] },
