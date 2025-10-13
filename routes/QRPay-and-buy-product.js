@@ -9,7 +9,7 @@ const mediaDir = path.join(__dirname, "../QRuploads");
 const User = require("../models/user");
 const Purchase = require("../models/purchase");
 const withdraw = require("../models/Withdraw");
-const commissionRates= require("../models/Commission");
+const commissionRates = require("../models/Commission");
 // Multer setup
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -105,7 +105,7 @@ QRPayRourter.post("/api/payments", async (req, res) => {
       dailyIncome: product.cycleType === "hour" ? product.hour : product.daily,
       purchaseType,
       claim: "waiting",
-      claimedCycles:[],
+      claimedCycles: [],
       createdAt: new Date(),
     };
 
@@ -134,43 +134,45 @@ QRPayRourter.post("/api/payments", async (req, res) => {
     await purchas.save();
 
     // ------------------------------ commission-----------------
-let currentUserId = user._id; // purchasing user
-const levels = ["team1", "team2", "team3"];
+    let currentUserId = user._id; // purchasing user
+    const levels = ["team1", "team2", "team3"];
 
-for (let i = 0; i < levels.length; i++) {
-  // 1️⃣ Check if current user has a referrer
-  const currentUser = await User.findById(currentUserId, "referredBy");
-  if (!currentUser?.referredBy?.refCode) break;
+    for (let i = 0; i < levels.length; i++) {
+      // 1️⃣ Check if current user has a referrer
+      const currentUser = await User.findById(currentUserId, "referredBy");
+      if (!currentUser?.referredBy?.refCode) break;
 
-  const uplineRefCode = currentUser.referredBy.refCode;
-  const teamField = levels[i];
-  const rate = commissionRates[`level${i + 1}`] || 0;
-  const commission = (TotalAmount * rate) / 100;
+      const uplineRefCode = currentUser.referredBy.refCode;
+      const teamField = levels[i];
+      const rate = commissionRates[`level${i + 1}`] || 0;
+      const commission = (TotalAmount * rate) / 100;
 
-  // 2️⃣ Update totalRecharge & totalCommission for the matching ids entry
-   await User.updateOne(
-    { 
-      referralCode: uplineRefCode,
-      [`${teamField}.ids.person`]: currentUserId.toString()
-    },
-    {
-      $inc: {
-        [`${teamField}.$.totalRecharge`]: TotalAmount,
-        [`${teamField}.$.totalCommission`]: commission,
-        pendingIncome: commission,
-        Withdrawal:TotalAmount
-      }
+      // 2️⃣ Update totalRecharge & totalCommission for the matching ids entry
+      await User.updateOne(
+        {
+          referralCode: uplineRefCode,
+          [`${teamField}.ids.person`]: currentUserId.toString(),
+        },
+        {
+          $inc: {
+            [`${teamField}.$.totalRecharge`]: TotalAmount,
+            [`${teamField}.$.totalCommission`]: commission,
+            pendingIncome: commission,
+            Withdrawal: TotalAmount,
+          },
+        }
+      );
+
+      // 3️⃣ Move up: set currentUserId to upline for next level
+      const upline = await User.findOne(
+        { referralCode: uplineRefCode },
+        "_id referredBy"
+      );
+      if (!upline) break;
+
+      currentUserId = upline._id;
     }
-  );
 
-  // 3️⃣ Move up: set currentUserId to upline for next level
-  const upline = await User.findOne({ referralCode: uplineRefCode }, "_id referredBy");
-  if (!upline) break;
-
-  currentUserId = upline._id;
-}
-
-     
     return res.json({ success: true, balance: updatedUser.balance });
   } catch (err) {
     console.error(err);
@@ -219,7 +221,7 @@ QRPayRourter.patch("/api/admin/payments/:id", async (req, res) => {
 QRPayRourter.post("/api/recharge", async (req, res) => {
   try {
     const { userId, amount, utr, qrImageName } = req.body;
-console.log(req.body);
+
     if (!userId || !amount || !utr || !qrImageName) {
       return res.status(400).json({ error: "Missing fields" });
     }
@@ -234,17 +236,26 @@ console.log(req.body);
     });
 
     const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      {
-        $inc: { totalBuy: amount, balance: amount },
+  userId,
+  {
+    $inc: { balance: amount }, // increase balance
+    $push: {
+      rechargeHistory: {
+        amount,
+        utr,
+        qrImageName,
+        approved: "Pending",
+        date: new Date(),
       },
-      { new: true } // return the updated document
-    );
+    },
+  },
+  { new: true } // returns updated document
+);
 
     return res.json({ success: true, payment, balance: updatedUser.balance });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error", err });
   }
 });
 

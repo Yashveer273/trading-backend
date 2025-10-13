@@ -364,8 +364,9 @@ UserRouter.get("/team-level", async (req, res) => {
 });
 
 UserRouter.get("/account_data", async (req, res) => {
+
   try {
-    const { userId } = req.body;
+    const { userId } = req.query;
 
     const user = await User.findById(userId).select(
       "totalBuy pendingIncome productIncome tasksReward Withdrawal balance"
@@ -379,6 +380,39 @@ UserRouter.get("/account_data", async (req, res) => {
       success: true,
       message: "User account data fetched successfully",
       data: user
+    });
+  } catch (error) {
+    console.error("Error fetching finance data:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+UserRouter.get("/purchase", async (req, res) => {
+  const { userId } = req.query;
+  console.log(req.query);
+
+  try {
+    const user = await User.findById(userId).select(
+      "purchases rechargeHistory withdrawHistory"
+    );
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    // Sort each array by date in descending order
+    const sortedUser = {
+      ...user.toObject(),
+      purchases: user.purchases?.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+      rechargeHistory: user.rechargeHistory?.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+      withdrawHistory: user.withdrawHistory?.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+    };
+
+    return res.json({
+      success: true,
+      message: "User account data fetched successfully",
+      data: sortedUser,
     });
   } catch (error) {
     console.error("Error fetching finance data:", error);

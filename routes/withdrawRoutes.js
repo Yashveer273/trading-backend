@@ -20,7 +20,15 @@ router.post("/", async (req, res) => {
       tradePassword: tradePassword,           // validate trade password directly in query
       "bankDetails.accountNumber": { $exists: true, $ne: "" }, // ensure bank info exists
       Withdrawal: { $gte: amount },              // sufficient balance
-      withdrawLimit: { $gte: amount },        // within withdraw limit
+      withdrawLimit: { $gte: amount },  
+      $push: {
+      withdrawHistory: {
+        amount,
+        user: userId,
+        status: "pending",
+        date: new Date.now(),
+      },
+    },      // within withdraw limit
     });
 
     if (!user) {

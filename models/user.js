@@ -41,6 +41,8 @@ const userSchema = new mongoose.Schema({
   balance: { type: Number, default: 0 },
   withdrawLimit:{ type: Number, default: 1000 },
   purchases: { type: Array, default: [] },
+  rechargeHistory: { type: Array, default: [] },
+  withdrawHistory: { type: Array, default: [] },
   tradePassword: { type: String, required: true },
   // ✅ New field for bank details
   bankDetails: {
