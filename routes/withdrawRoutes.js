@@ -6,14 +6,14 @@ const User = require("../models/user");
 
 // ✅ Withdraw Request
 router.post("/", async (req, res) => {
-  console.log("111");
+
   try {
     const { userId, amount, tradePassword } = req.body;
 
     if (!userId || !amount || !tradePassword) {
       return res.status(400).json({ success: false, message: "All fields are required" });
     }
-
+ const timestamp = new Date();
     // 🟢 Find user and validate trade password + bank details + balance + limit
     const user = await User.findOne({
       _id: userId,
@@ -26,7 +26,7 @@ router.post("/", async (req, res) => {
         amount,
         user: userId,
         status: "pending",
-        date: new Date.now(),
+        timestamp
       },
     },      // within withdraw limit
     });
@@ -46,7 +46,7 @@ router.post("/", async (req, res) => {
     );
 
     // 🟢 Save withdrawal request
-    const withdraw = await Withdraw.create({ user: userId, amount });
+    const withdraw = await Withdraw.create({ user: userId, amount,timestamp });
 
     res.json({
       success: true,
@@ -124,11 +124,22 @@ router.get("/withdraw-pending", async (req, res) => {
 // Approve a withdrawal
 router.put("/withdraw-approve/:id", async (req, res) => {
   try {
+    
     const updated = await Withdraw.findByIdAndUpdate(
       req.params.id,
       { status: "approved" },
       { new: true }
     );
+    const timestamp = updated.timestamp;
+await User.updateOne(
+    { _id: req.params.id, "withdrawHistory.timestamp": timestamp },
+    {
+      $set: {
+        "withdrawHistory.$.status": "approved",
+        "withdrawHistory.$.approvedAt": new Date(), // optional: record approval time
+      },
+    }
+  );
     res.json({ success: true, message: "Withdrawal approved", data: updated });
   } catch (error) {
     console.error("Error approving withdrawal:", error);
@@ -144,6 +155,16 @@ router.put("/withdraw-reject/:id", async (req, res) => {
       { status: "rejected" },
       { new: true }
     );
+    const timestamp = updated.timestamp;
+await User.updateOne(
+    { _id: req.params.id, "withdrawHistory.timestamp": timestamp },
+    {
+      $set: {
+        "withdrawHistory.$.status": "rejected",
+        "withdrawHistory.$.rejectedAt": new Date(), // optional: record approval time
+      },
+    }
+  );
     res.json({ success: true, message: "Withdrawal rejected", data: updated });
   } catch (error) {
     console.error("Error rejecting withdrawal:", error);

@@ -9,8 +9,9 @@ const referralStageSchema = new mongoose.Schema({
 });
 
 const luckySpinSchema = new mongoose.Schema({
-  spinsToday: { type: Number, default: 1 }, // how many spins user has done today
+  SpinLimit: { type: Number, default: 1 }, // how many spins user has done today
   lastSpinDate: { type: Date, default: null }, // last spin date
+  spinsToday: { type: Number, default: 1 }, 
   createdAt: { type: Date, default: Date.now },
 });
 const referredBySchema = new mongoose.Schema(

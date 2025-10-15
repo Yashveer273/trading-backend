@@ -203,19 +203,45 @@ QRPayRourter.get("/api/admin/pending", async (req, res) => {
 // --- API 5: Update Payment Status (Admin) ---
 QRPayRourter.patch("/api/admin/payments/:id", async (req, res) => {
   try {
-    const id = req.params.id;
+    const { id } = req.params;
     const { approved, remarks } = req.body;
+
     const payment = await Payment.findById(id);
-    if (!payment) return res.status(404).json({ error: "Payment not found" });
+    if (!payment) return res.status(404).json({ success: false, message: "Payment not found" });
+
+    // Update payment record
     if (typeof approved === "string") payment.approved = approved;
     if (remarks) payment.remarks = remarks;
     await payment.save();
-    return res.json({ success: true, payment });
+
+    // Update user's rechargeHistory by UTR
+    if (payment.userId && payment.utr) {
+      const updateFields = {};
+
+      if (approved === "Approved") {
+        updateFields.$inc = { balance: payment.amount };
+      }
+
+      // ✅ $set will update existing statusUpdateDate or create if missing
+      updateFields.$set = {
+        "rechargeHistory.$[entry].approved": approved,
+        "rechargeHistory.$[entry].statusUpdateDate": new Date(), // creates if not exist
+      };
+
+      await User.updateOne(
+        { _id: payment.userId, "rechargeHistory.utr": payment.utr },
+        updateFields,
+        { arrayFilters: [{ "entry.utr": payment.utr }] }
+      );
+    }
+
+    return res.json({ success: true, message: "Payment updated successfully", payment });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 // api 6 recharge balance---------
 
 QRPayRourter.post("/api/recharge", async (req, res) => {
@@ -237,8 +263,7 @@ QRPayRourter.post("/api/recharge", async (req, res) => {
 
     const updatedUser = await User.findByIdAndUpdate(
   userId,
-  {
-    $inc: { balance: amount }, // increase balance
+  { 
     $push: {
       rechargeHistory: {
         amount,
@@ -246,6 +271,7 @@ QRPayRourter.post("/api/recharge", async (req, res) => {
         qrImageName,
         approved: "Pending",
         date: new Date(),
+        statusUpdateDate: new Date(),
       },
     },
   },

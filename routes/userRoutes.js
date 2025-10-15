@@ -1,9 +1,9 @@
 const express = require("express");
 const User = require("../models/user");
-const jwt = require('jsonwebtoken');
+const jwt = require("jsonwebtoken");
 
 const UserRouter = express.Router();
-const SECRET_KEY="SECRET_KEY12356789";
+const SECRET_KEY = "SECRET_KEY12356789";
 // GET all users
 const Commission = require("../models/Commission");
 UserRouter.get("/", async (req, res) => {
@@ -15,7 +15,7 @@ UserRouter.get("/", async (req, res) => {
   }
 });
 UserRouter.get("/user", async (req, res) => {
-  const {userId}=req.query;
+  const { userId } = req.query;
   try {
     const users = await User.findById(userId);
     res.status(200).json({ success: true, users });
@@ -26,12 +26,18 @@ UserRouter.get("/user", async (req, res) => {
 // Direct team (Stage 1)
 UserRouter.get("/:userId/direct-team", async (req, res) => {
   try {
-    const user = await User.findById(req.params.userId).populate("referrals.person", "phone");
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    const user = await User.findById(req.params.userId).populate(
+      "referrals.person",
+      "phone"
+    );
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     const directTeam = user.referrals
-      .filter(r => r.stage === 1)
-      .map(r => ({
+      .filter((r) => r.stage === 1)
+      .map((r) => ({
         phone: r.person?.phone || "-",
         stage: r.stage,
         totalCommission: r.totalCommission || 0,
@@ -46,12 +52,18 @@ UserRouter.get("/:userId/direct-team", async (req, res) => {
 // Indirect team (Stage 2 & 3)
 UserRouter.get("/:userId/indirect-team", async (req, res) => {
   try {
-    const user = await User.findById(req.params.userId).populate("referrals.person", "phone");
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    const user = await User.findById(req.params.userId).populate(
+      "referrals.person",
+      "phone"
+    );
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     const indirectTeam = user.referrals
-      .filter(r => r.stage === 2 || r.stage === 3)
-      .map(r => ({
+      .filter((r) => r.stage === 2 || r.stage === 3)
+      .map((r) => ({
         phone: r.person?.phone || "-",
         stage: r.stage,
         totalCommission: r.totalCommission || 0,
@@ -67,7 +79,10 @@ UserRouter.get("/:userId/indirect-team", async (req, res) => {
 UserRouter.get("/:userId/withdraw-limit", async (req, res) => {
   try {
     const user = await User.findById(req.params.userId);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     res.status(200).json({
       success: true,
@@ -84,7 +99,10 @@ UserRouter.get("/:userId/withdraw-limit", async (req, res) => {
 UserRouter.put("/:userId/withdraw-limit", async (req, res) => {
   try {
     const { limit } = req.body;
-    if (!limit) return res.status(400).json({ success: false, message: "Limit is required" });
+    if (!limit)
+      return res
+        .status(400)
+        .json({ success: false, message: "Limit is required" });
 
     const user = await User.findByIdAndUpdate(
       req.params.userId,
@@ -92,7 +110,10 @@ UserRouter.put("/:userId/withdraw-limit", async (req, res) => {
       { new: true }
     );
 
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     res.status(200).json({
       success: true,
@@ -105,14 +126,9 @@ UserRouter.put("/:userId/withdraw-limit", async (req, res) => {
   }
 });
 
-
-
-
 // POST /api/auth/register
 const generateReferralCode = () =>
   Math.random().toString(36).substr(2, 6).toUpperCase();
-
-
 
 UserRouter.post("/register", async (req, res) => {
   try {
@@ -149,7 +165,7 @@ UserRouter.post("/register", async (req, res) => {
       password, // ⚠️ hash in production
       referralCode,
       tradePassword,
-     
+
       referredBy: refCode
         ? { refCode: level1User.referralCode, phone: level1User.phone }
         : null,
@@ -169,11 +185,9 @@ UserRouter.post("/register", async (req, res) => {
         {
           $push: {
             team1: {
-     
-              ids: [{ phone: newUser.phone,person: newUser._id, }],
+              ids: [{ phone: newUser.phone, person: newUser._id }],
             },
           },
-           
         }
       );
 
@@ -188,11 +202,9 @@ UserRouter.post("/register", async (req, res) => {
             {
               $push: {
                 team2: {
-                 
-                  ids: [{ phone: newUser.phone, person: newUser._id, }],
+                  ids: [{ phone: newUser.phone, person: newUser._id }],
                 },
               },
-              
             }
           );
 
@@ -207,8 +219,7 @@ UserRouter.post("/register", async (req, res) => {
                 {
                   $push: {
                     team3: {
-                    
-                      ids: [{ phone: newUser.phone,person: newUser._id, }],
+                      ids: [{ phone: newUser.phone, person: newUser._id }],
                     },
                   },
                 }
@@ -231,29 +242,36 @@ UserRouter.post("/register", async (req, res) => {
   }
 });
 
-
 UserRouter.post("/login", async (req, res) => {
   try {
     const { phone, password } = req.body;
 
     // Check if fields provided
     if (!phone || !password) {
-      return res.status(400).json({ success: false, message: "Phone and password are required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Phone and password are required" });
     }
 
     // Find user
     const user = await User.findOne({ phone });
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     // ⚠️ In production use bcrypt.compare
     if (user.password !== password) {
-      return res.status(401).json({ success: false, message: "Invalid credentials" });
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid credentials" });
     }
 
     // Generate new JWT
-    const token = jwt.sign({ phone: user.phone }, SECRET_KEY, { expiresIn: "7d" });
+    const token = jwt.sign({ phone: user.phone }, SECRET_KEY, {
+      expiresIn: "7d",
+    });
 
     // Save token in DB
     user.token = token;
@@ -274,7 +292,8 @@ UserRouter.post("/login", async (req, res) => {
 UserRouter.post("/get-team", async (req, res) => {
   try {
     const { _id, teamLevel } = req.body;
-    if (!_id || !teamLevel) return res.json({ success: false, message: "Missing _id or teamLevel" });
+    if (!_id || !teamLevel)
+      return res.json({ success: false, message: "Missing _id or teamLevel" });
 
     const field = `team${teamLevel}`;
     const user = await User.findById(_id, field).lean();
@@ -294,11 +313,15 @@ UserRouter.post("/get-team", async (req, res) => {
 UserRouter.get("/team-overview", async (req, res) => {
   try {
     const { _id } = req.query;
-    if (!_id) return res.status(400).json({ success: false, message: "Missing _id" });
+    if (!_id)
+      return res.status(400).json({ success: false, message: "Missing _id" });
 
     // 🔹 Find user
     const user = await User.findById(_id).lean();
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     // 🔹 Get current commission rates (assume one document)
     const commissionDoc = await Commission.findOne().lean();
@@ -306,8 +329,14 @@ UserRouter.get("/team-overview", async (req, res) => {
 
     // 🔹 Helper function
     const calcTeam = (team, rate) => {
-      const totalRecharge = team.reduce((sum, m) => sum + (m.totalRecharge || 0), 0);
-      const totalCommission = team.reduce((sum, m) => sum + (m.totalCommission || 0), 0);
+      const totalRecharge = team.reduce(
+        (sum, m) => sum + (m.totalRecharge || 0),
+        0
+      );
+      const totalCommission = team.reduce(
+        (sum, m) => sum + (m.totalCommission || 0),
+        0
+      );
       return {
         totalMembers: team.length,
         totalRecharge,
@@ -320,13 +349,18 @@ UserRouter.get("/team-overview", async (req, res) => {
       team1: calcTeam(user.team1 || [], rates.level1),
       team2: calcTeam(user.team2 || [], rates.level2),
       team3: calcTeam(user.team3 || [], rates.level3),
-      totalTeams: (user.team1?.length || 0) + (user.team2?.length || 0) + (user.team3?.length || 0),
+      totalTeams:
+        (user.team1?.length || 0) +
+        (user.team2?.length || 0) +
+        (user.team3?.length || 0),
     };
 
     res.json({ success: true, message: "Team overview fetched", overview });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: err.message });
   }
 });
 
@@ -335,11 +369,16 @@ UserRouter.get("/team-level", async (req, res) => {
   try {
     const { _id, level } = req.query;
 
-    if (!_id) return res.status(400).json({ success: false, message: "Missing _id" });
-    if (!level) return res.status(400).json({ success: false, message: "Missing level" });
+    if (!_id)
+      return res.status(400).json({ success: false, message: "Missing _id" });
+    if (!level)
+      return res.status(400).json({ success: false, message: "Missing level" });
 
     const user = await User.findById(_id).lean();
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     let teamArray = [];
     switch (Number(level)) {
@@ -353,18 +392,25 @@ UserRouter.get("/team-level", async (req, res) => {
         teamArray = user.team3 || [];
         break;
       default:
-        return res.status(400).json({ success: false, message: "Invalid level" });
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid level" });
     }
 
-    res.json({ success: true, message: `Team ${level} fetched`, team: teamArray });
+    res.json({
+      success: true,
+      message: `Team ${level} fetched`,
+      team: teamArray,
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: err.message });
   }
 });
 
 UserRouter.get("/account_data", async (req, res) => {
-
   try {
     const { userId } = req.query;
 
@@ -373,13 +419,15 @@ UserRouter.get("/account_data", async (req, res) => {
     );
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     return res.json({
       success: true,
       message: "User account data fetched successfully",
-      data: user
+      data: user,
     });
   } catch (error) {
     console.error("Error fetching finance data:", error);
@@ -387,13 +435,19 @@ UserRouter.get("/account_data", async (req, res) => {
   }
 });
 UserRouter.get("/purchase", async (req, res) => {
-  const { userId } = req.query;
-  console.log(req.query);
+  const { userId, totalOnly } = req.query;
+
+  if (!userId) {
+    return res
+      .status(400)
+      .json({ success: false, message: "userId is required" });
+  }
 
   try {
-    const user = await User.findById(userId).select(
-      "purchases rechargeHistory withdrawHistory"
-    );
+    // Fetch only what we need
+    const user = await User.findById(userId)
+      .select("purchases rechargeHistory withdrawHistory")
+      .lean();
 
     if (!user) {
       return res
@@ -401,18 +455,41 @@ UserRouter.get("/purchase", async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    // Sort each array by date in descending order
-    const sortedUser = {
-      ...user.toObject(),
-      purchases: user.purchases?.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
-      rechargeHistory: user.rechargeHistory?.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
-      withdrawHistory: user.withdrawHistory?.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
-    };
+    // Calculate total purchases amount
+    const totalRechargeAmount = (user.rechargeHistory || []).reduce(
+      (sum, record) => sum + (record.amount || 0),
+      0
+    );
+    const totalWithdrawAmount = (user.withdrawHistory || []).reduce(
+      (sum, record) => sum + (record.amount || 0),
+      0
+    );
+    // ✅ If only total requested
+    if (totalOnly === "true") {
+      return res.json({
+        success: true,
+        message: "Total purchases amount fetched successfully",
+        totalRechargeAmount,
+        totalWithdrawAmount,
+      });
+    }
+
+    // Otherwise, prepare full data
+    const sortAndLimit = (arr = []) =>
+      arr
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, 50);
+
+    const purchases = user.purchases;
+    const rechargeHistory = sortAndLimit(user.rechargeHistory);
+    const withdrawHistory = sortAndLimit(user.withdrawHistory);
 
     return res.json({
       success: true,
       message: "User account data fetched successfully",
-      data: sortedUser,
+      data: { purchases, rechargeHistory, withdrawHistory },
+      totalRechargeAmount,
+      totalWithdrawAmount,
     });
   } catch (error) {
     console.error("Error fetching finance data:", error);
@@ -420,5 +497,111 @@ UserRouter.get("/purchase", async (req, res) => {
   }
 });
 
+UserRouter.post("/user-luckySpin-validationcheck", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const user = await User.findById(userId).lean();
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+
+    const today = new Date();
+    const lastSpin = user.luckySpin?.lastSpinDate;
+
+    const isSameDay =
+      lastSpin &&
+      lastSpin.getFullYear() === today.getFullYear() &&
+      lastSpin.getMonth() === today.getMonth() &&
+      lastSpin.getDate() === today.getDate();
+
+    const spinsToday = isSameDay ? user.luckySpin.spinsToday : 0;
+    const canSpin = spinsToday < (user.luckySpin?.SpinLimit || 1);
+
+    res.json({
+      success: true,
+      canSpin,
+      spinsToday,
+      SpinLimit: user.luckySpin?.SpinLimit || 1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+UserRouter.post("/user-luckySpin-dataCreate", async (req, res) => {
+  try {
+    const { userId, amount } = req.body;
+    const parseAmount = (value) => {
+      const num = Number(value);
+      return isNaN(num) || !isFinite(num) ? 0 : num;
+    };
+    const NewAmount = parseAmount(amount);
+    const today = new Date();
+
+    // First get current spin info
+    const user = await User.findById(userId);
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+
+    const lastSpin = user.luckySpin?.lastSpinDate;
+    const isSameDay =
+      lastSpin &&
+      lastSpin.getFullYear() === today.getFullYear() &&
+      lastSpin.getMonth() === today.getMonth() &&
+      lastSpin.getDate() === today.getDate();
+
+    if (isSameDay) {
+      if (user.luckySpin.spinsToday < user.luckySpin.SpinLimit) {
+        await User.findByIdAndUpdate(
+          userId,
+          {
+            $inc: {
+              tasksReward: NewAmount,
+              Withdrawal: NewAmount,
+              "luckySpin.spinsToday": 1,
+            },
+            $set: { "luckySpin.lastSpinDate": today },
+          },
+          { new: true }
+        );
+      }
+    } else {
+      // New day: reset spinsToday to 1
+      await User.findByIdAndUpdate(
+        userId,
+        {
+          $set: { "luckySpin.spinsToday": 1, "luckySpin.lastSpinDate": today },
+        },
+        { new: true }
+      );
+    }
+
+    const updatedUser = await User.findById(userId).lean();
+    res.json({ success: true, luckySpin: updatedUser.luckySpin });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+UserRouter.post("/user-luckySpin-dataGet", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const user = await User.findById(userId).lean();
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+
+    res.json({ success: true, luckySpin: user.luckySpin });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 module.exports = UserRouter;

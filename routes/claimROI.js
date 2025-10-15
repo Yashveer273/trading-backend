@@ -24,7 +24,7 @@ ClaimRoiRouter.get("/",async (req, res) => {
 ClaimRoiRouter.post("/add", async (req, res) => {
   try {
     const { userId, productId, cycleIndex, claimAmount } = req.body;
-console.log(req.body);
+
     if (!userId || !productId || cycleIndex === undefined || !claimAmount) {
       return res.status(400).json({ success: false, message: "All fields required" });
     }
