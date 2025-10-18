@@ -807,6 +807,7 @@ UserRouter.get("/details/:id", async (req, res) => {
       Withdrawal:1,
       withdrawHistory:1,
       rechargeHistory:1,
+      createdAt:1,
       team1: { $slice: 10 },
       team2: { $slice: 10 },
       team3: { $slice: 10 },
