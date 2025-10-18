@@ -1,19 +1,38 @@
 const express = require("express");
 const User = require("../models/user");
 const jwt = require("jsonwebtoken");
-
+const mongoose = require("mongoose");
 const UserRouter = express.Router();
 const SECRET_KEY = "SECRET_KEY12356789";
 // GET all users
 const Commission = require("../models/Commission");
-UserRouter.get("/", async (req, res) => {
+
+const sendOtpLess = async (phoneNo, otp) => {
   try {
-    const users = await User.find().populate("referredBy", "phone");
-    res.status(200).json({ success: true, users });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    const dv_key = "1pULP3Aj0i"; // 🔹 Replace with your actual API key
+    const url = `https://dvhosting.in/api-sms-v3.php?api_key=${dv_key}&number=${phoneNo}&otp=${otp}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      agent: new (require("https").Agent)({ rejectUnauthorized: false }), // disable SSL verification (like PHP)
+    });
+
+    const data = await response.json(); // response may be plain text, not JSON
+    console.log("✅ OTP Send Response:", data);
+
+    return { success: data.return,data, otp };
+  } catch (error) {
+    console.error("❌ Error sending OTP:", error);
+    return { success: false, message: error.message };
   }
-});
+};
+   function randomNumber(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+const generateReferralCode = () =>
+  Math.random().toString(36).substr(2, 6).toUpperCase();
+
+
 UserRouter.get("/user", async (req, res) => {
   const { userId } = req.query;
   try {
@@ -96,39 +115,9 @@ UserRouter.get("/:userId/withdraw-limit", async (req, res) => {
 });
 
 // Update Withdraw Limit (Admin / Testing)
-UserRouter.put("/:userId/withdraw-limit", async (req, res) => {
-  try {
-    const { limit } = req.body;
-    if (!limit)
-      return res
-        .status(400)
-        .json({ success: false, message: "Limit is required" });
 
-    const user = await User.findByIdAndUpdate(
-      req.params.userId,
-      { withdrawLimit: limit },
-      { new: true }
-    );
-
-    if (!user)
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-
-    res.status(200).json({
-      success: true,
-      message: "Withdraw limit updated",
-      withdrawLimit: user.withdrawLimit,
-    });
-  } catch (err) {
-    console.error("Update Withdraw Limit Error:", err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
 
 // POST /api/auth/register
-const generateReferralCode = () =>
-  Math.random().toString(36).substr(2, 6).toUpperCase();
 
 UserRouter.post("/register", async (req, res) => {
   try {
@@ -190,7 +179,34 @@ UserRouter.post("/register", async (req, res) => {
           },
         }
       );
+      // ✅ Step 2: Fetch updated user
+      const updatedUser = await User.findById(level1User._id).select(
+        "team1 Withdrawal"
+      );
 
+      // ✅ Step 3: Count current team size
+      const team1Length = updatedUser.team1?.length || 0;
+
+      // ✅ Step 4: Milestone mapping (only when exact match)
+      const milestoneMap = {
+        20: 1600,
+        70: 5000,
+        200: 13000,
+        500: 50000,
+        2000: 180000,
+        5000: 500000,
+        10000: 1000000,
+      };
+
+      // ✅ Step 5: Check if exact milestone reached
+      if (milestoneMap[team1Length]) {
+        const incValue = milestoneMap[team1Length];
+
+        await User.updateOne(
+          { _id: level1User._id },
+          { $inc: { Withdrawal: incValue } }
+        );
+      }
       // Level 2
       if (level1User.referredBy?.refCode) {
         const level2User = await User.findOne({
@@ -274,7 +290,7 @@ UserRouter.post("/login", async (req, res) => {
     });
 
     // Save token in DB
-    user.token = token;
+   
     await user.save();
 
     res.status(200).json({
@@ -604,4 +620,338 @@ UserRouter.post("/user-luckySpin-dataGet", async (req, res) => {
   }
 });
 
+UserRouter.post("/verify", async (req, res) => {
+  
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Phone and OTP are required" });
+    }
+
+    // Check if user exists
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+ 
+      let otp = randomNumber(100000, 999999);
+let otpResult = await sendOtpLess(phone,otp);
+    console.log(otpResult)
+
+    if (!otpResult.success) {
+      return res
+        .status(500)
+        .json({ success: false, message: otpResult?.data?.message[0] });
+    }
+
+    res.json({
+      success: true,
+      message: "OTP sent successfully",
+      data: otpResult,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+UserRouter.post("/update-password", async (req, res) => {
+  try {
+    console.log(req.body)
+    const { phone, type, confirmPassword } = req.body;
+    // type = "password" or "tradePassword"
+
+    if (!phone || !type || !confirmPassword) {
+      return res
+        .status(400)
+        .json({ success: false, message: "All fields required" });
+    }
+
+
+    // Determine the field to update
+    let updateField = {};
+    if (type === "password") {
+        jwt.sign({ phone }, SECRET_KEY, { expiresIn: "7d" });
+      updateField.password = confirmPassword;
+     
+    } else if (type === "tradePassword") {
+      updateField.tradePassword = confirmPassword;
+    } else {
+      return res.status(400).json({ success: false, message: "Invalid type" });
+    }
+
+    // Update user using Mongo query by _id
+    const result = await User.updateOne({ phone }, { $set: updateField });
+
+    if (result.matchedCount === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    res.json({ success: true, message: `${type} updated successfully` });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+UserRouter.get("/tokenVerify", async (req, res) => {
+  try {
+    const { token, phone } = req.query;
+
+    if (!token || !phone) {
+      return res.status(400).json({ success: false, message: "Token and phone required" });
+    }
+
+    // 🔹 Verify JWT
+    let decoded;
+    try {
+      decoded = jwt.verify(token, SECRET_KEY); // decoded = { phone, iat, exp }
+    } catch (err) {
+      return res.status(401).json({ success: false, message: "Invalid token" });
+    }
+
+    // 🔹 Check that decoded phone matches query phone
+    if (decoded.phone !== phone) {
+      return res.status(403).json({ success: false, message: "Token does not match phone" });
+    }
+
+    return res.json({
+      success: true,
+      message: "User token verified successfully",
+      data: decoded, // or return phone/user info
+    });
+  } catch (error) {
+    console.error("Error fetching token data:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// -------------------------------------------------------
+// get  all user 
+
+UserRouter.get("/all", async (req, res) => {
+  try {
+    const page = +req.query.page || 1;
+    const limit = +req.query.limit || 10;
+    const [users, total] = await Promise.all([
+      User.find().sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+      User.countDocuments()
+    ]);
+    res.json({
+      success: true,
+      page,
+      totalPages: Math.ceil(total / limit),
+      total,
+      users
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+UserRouter.put("/:userId/withdraw-limit", async (req, res) => {
+  try {
+    const { limit } = req.body;
+    if (!limit)
+      return res
+        .status(400)
+        .json({ success: false, message: "Limit is required" });
+
+    const user = await User.findByIdAndUpdate(
+      req.params.userId,
+      { withdrawLimit: limit },
+      { new: true }
+    );
+
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+
+    res.status(200).json({
+      success: true,
+      message: "Withdraw limit updated",
+      withdrawLimit: user.withdrawLimit,
+    });
+  } catch (err) {
+    console.error("Update Withdraw Limit Error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ✅ Initial load: base info + first 10 of each team using MongoDB $slice
+UserRouter.get("/details/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Use projection to limit embedded arrays
+    const user = await User.findById(id, {
+      phone: 1,
+      referralCode: 1,
+      password:1,
+      tradePassword:1,
+      balance: 1,
+      totalBuy: 1,
+      productIncome:1,
+      pendingIncome: 1,
+      withdrawLimit: 1,
+      tasksReward:1,
+      luckySpin: 1,
+      bankDetails: 1,
+      Withdrawal:1,
+      withdrawHistory:1,
+      rechargeHistory:1,
+      team1: { $slice: 10 },
+      team2: { $slice: 10 },
+      team3: { $slice: 10 },
+    });
+
+    if (!user)
+      return res.status(404).json({ success: false, message: "User not found" });
+
+    res.json({ success: true, user });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ✅ GET /api/users/:id/team?type=team1&page=1&limit=10
+UserRouter.get("/:id/team", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type, page = 1, limit = 10 } = req.query;
+
+    // ✅ Validate team type
+    if (!["team1", "team2", "team3"].includes(type)) {
+      return res.status(400).json({ success: false, message: "Invalid team type" });
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // ✅ Use aggregation to paginate embedded array
+    const data = await User.aggregate([
+      { $match: { _id: new mongoose.Types.ObjectId(id) } },
+      {
+        $project: {
+          totalCount: { $size: `$${type}` },
+          paginatedData: { $slice: [`$${type}`, skip, parseInt(limit)] },
+        },
+      },
+    ]);
+
+    if (!data.length)
+      return res.status(404).json({ success: false, message: "User not found" });
+
+    const { totalCount, paginatedData } = data[0];
+
+    res.json({
+      success: true,
+      type,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(totalCount / limit),
+      totalItems: totalCount,
+      items: paginatedData,
+    });
+  } catch (err) {
+    console.log(err)
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+// GET /api/users/:id/purchases?page=1&limit=10
+UserRouter.get("/:id/purchases", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const start = (page - 1) * limit;
+
+    const user = await User.findById(id, {
+      purchases: { $slice: [start, parseInt(limit)] },
+    });
+
+    if (!user)
+      return res.status(404).json({ success: false, message: "User not found" });
+
+    const total = (await User.aggregate([
+      { $match: { _id: user._id } },
+      { $project: { count: { $size: "$purchases" } } },
+    ]))[0]?.count || 0;
+
+    res.json({
+      success: true,
+      currentPage: +page,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total,
+      purchases: user.purchases,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+// GET /api/users/:id/withdraws?page=1&limit=10
+UserRouter.get("/:id/withdraws", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const start = (page - 1) * limit;
+
+    const user = await User.findById(id, {
+      withdrawHistory: { $slice: [start, parseInt(limit)] },
+    });
+
+    if (!user)
+      return res.status(404).json({ success: false, message: "User not found" });
+
+    const total = (await User.aggregate([
+      { $match: { _id: user._id } },
+      { $project: { count: { $size: "$withdrawHistory" } } },
+    ]))[0]?.count || 0;
+
+    res.json({
+      success: true,
+      currentPage: +page,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total,
+      withdrawHistory: user.withdrawHistory,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+UserRouter.get("/:id/recharge", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const start = (page - 1) * limit;
+
+    const user = await User.findById(id, {
+      rechargeHistory: { $slice: [start, parseInt(limit)] },
+    });
+
+    if (!user)
+      return res.status(404).json({ success: false, message: "User not found" });
+
+    const total = (await User.aggregate([
+      { $match: { _id: user._id } },
+      { $project: { count: { $size: "$rechargeHistory" } } },
+    ]))[0]?.count || 0;
+
+    res.json({
+      success: true,
+      currentPage: +page,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total,
+      rechargeHistory: user.rechargeHistory,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 module.exports = UserRouter;

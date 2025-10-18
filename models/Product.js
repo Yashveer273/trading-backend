@@ -13,6 +13,7 @@ const productSchema = new mongoose.Schema(
     totalIncomeHour: { type: Number, default: 0 },
     imageUrl: { type: String, default: "" },  
     purchaseType: { type: String, default: "One time buy" } ,   
+    productExplanation: { type: Array, default: [] },
     badge: {
       type: String,
       enum: ["non", "popular", "limited", "new"],

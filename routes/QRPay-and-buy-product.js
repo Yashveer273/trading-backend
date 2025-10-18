@@ -10,6 +10,7 @@ const User = require("../models/user");
 const Purchase = require("../models/purchase");
 const withdraw = require("../models/Withdraw");
 const commissionRates = require("../models/Commission");
+
 // Multer setup
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -24,43 +25,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// --- API 1: Upload QR Image ---
-QRPayRourter.post("/api/upload", upload.single("qr"), async (req, res) => {
-  try {
-    if (!req.file)
-      return res
-        .status(400)
-        .json({ error: "No file uploaded (field name must be 'qr')" });
-    const qr = await QR.create({ filename: req.file.filename });
-    return res.json({
-      success: true,
-      qr,
-      url: `${req.protocol}://${req.get("host")}/QRuploads/${
-        req.file.filename
-      }`,
-    });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Server error" });
-  }
-});
 
-// --- API 2: Get Random QR (latest 3) ---
-QRPayRourter.get("/api/qr/random", async (req, res) => {
-  try {
-    const qrs = await QR.find().sort({ createdAt: -1 }).limit(3);
-    if (!qrs || qrs.length === 0)
-      return res.status(404).json({ error: "No QRs available" });
-    const choice = qrs[Math.floor(Math.random() * qrs.length)];
-    return res.json({
-      filename: choice.filename,
-      url: `${req.protocol}://${req.get("host")}/QRuploads/${choice.filename}`,
-    });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Server error" });
-  }
-});
 
 // --- API 3: buy product  ---
 QRPayRourter.post("/api/payments", async (req, res) => {
@@ -316,7 +281,45 @@ QRPayRourter.get("/recharge-list", async (req, res) => {
     });
   }
 });
-// ---------------------------------------------------------------
+// -----------------------------------++++++++++++++++++++++++
+// --- API 1: Upload QR Image ---
+QRPayRourter.post("/api/upload", upload.single("qr"), async (req, res) => {
+  try {
+    if (!req.file)
+      return res
+        .status(400)
+        .json({ error: "No file uploaded (field name must be 'qr')" });
+    const qr = await QR.create({ filename: req.file.filename });
+    return res.json({
+      success: true,
+      qr,
+      url: `${req.protocol}://${req.get("host")}/QRuploads/${
+        req.file.filename
+      }`,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+// --- READ ALL QRs ---
+
+// --- API 2: Get Random QR (latest 3) ---
+QRPayRourter.get("/api/qr/random", async (req, res) => {
+  try {
+    const qrs = await QR.find().sort({ createdAt: -1 }).limit(3);
+    if (!qrs || qrs.length === 0)
+      return res.status(404).json({ error: "No QRs available" });
+    const choice = qrs[Math.floor(Math.random() * qrs.length)];
+    return res.json({
+      filename: choice.filename,
+      url: `${req.protocol}://${req.get("host")}/QRuploads/${choice.filename}`,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
 // --- Extra API: List All QRs ---
 QRPayRourter.get("/api/qrs", async (req, res) => {
   try {
@@ -333,7 +336,45 @@ QRPayRourter.get("/api/qrs", async (req, res) => {
     return res.status(500).json({ error: "Server error" });
   }
 });
+QRPayRourter.put("/api/qrs/:id", upload.single("qr"), async (req, res) => {
+  try {
+    if (!req.file)
+      return res
+        .status(400)
+        .json({ error: "No file uploaded (field name must be 'qr')" });
 
+    const qr = await QR.findByIdAndUpdate(
+      req.params.id,
+      { filename: req.file.filename },
+      { new: true }
+    );
+
+    if (!qr) return res.status(404).json({ error: "QR not found" });
+
+    res.json({
+      success: true,
+      qr,
+      url: `${req.protocol}://${req.get("host")}/QRuploads/${req.file.filename}`,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// --- DELETE QR ---
+QRPayRourter.delete("/api/qrs/:id", async (req, res) => {
+  try {
+    const qr = await QR.findByIdAndDelete(req.params.id);
+    if (!qr) return res.status(404).json({ error: "QR not found" });
+    res.json({ success: true, message: "QR deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ------------------------------------+++++++++++++++++++++++++++++++++++++
 // ✅ Get paginated purchases + withdraw/recharge stats
 QRPayRourter.get("/product-purchase-list", async (req, res) => {
   try {
@@ -470,4 +511,7 @@ QRPayRourter.get("/transaction-stats", async (req, res) => {
     });
   }
 });
+
+
+
 module.exports = QRPayRourter;

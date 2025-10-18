@@ -23,11 +23,24 @@ const upload = multer({ storage });
 
 // ---------------- CREATE product ----------------
 router.post("/add", upload.single("image"), async (req, res) => {
- 
+
  
   try {
-    const { categoryName, productName, price, cycleType, cycleValue, daily, hour,purchaseType, badge } = req.body;
+    const { categoryName, productName, price, cycleType, cycleValue, daily, hour,purchaseType, badge,productExplanation } = req.body;
+    var pExplanation=[];
+    
+if (typeof productExplanation === 'string') {
+        pExplanation = JSON.parse(productExplanation);
+    }
 
+    // --- Your original validation starts here ---
+    if (!Array.isArray(pExplanation)) {
+        console.log(productExplanation); // This will log the stringified value if parsing failed/was skipped
+        return res.status(500).json({ 
+            success: false, 
+            message: "Invalid data: productExplanation must be an array." 
+        });
+    }
     let imageUrl = "";
     if (req.file) {
       imageUrl = `/uploads/${req.file.filename}`; // save relative path
@@ -39,6 +52,7 @@ router.post("/add", upload.single("image"), async (req, res) => {
       price,
       cycleType,
       cycleValue,
+       productExplanation:pExplanation,
       daily: Number(daily) || 0,
       hour: Number(hour) || 0,
       imageUrl,
@@ -84,37 +98,83 @@ router.get("/:id", async (req, res) => {
 
 // ---------------- UPDATE product ----------------
 router.put("/:id", upload.single("image"), async (req, res) => {
-  
-  try {
-    const { categoryName, productName, price, cycleType, cycleValue, daily, hour,purchaseType, badge } = req.body;
+    // Destructure all fields from req.body (or where they are expected)
+    const { 
+        categoryName, 
+        productName, 
+        price, 
+        cycleType, 
+        cycleValue, 
+        productExplanation: rawProductExplanation, // Rename to raw
+        daily, 
+        hour, 
+        purchaseType, 
+        badge 
+    } = req.body;
+    
+    // 1. Initialize a variable for the parsed array
+    let finalProductExplanation = [];
 
-    let updateData = {
-      categoryName,
-      productName,
-      price,
-      cycleType,
-      cycleValue,
-      daily: Number(daily) || 0,
-      hour: Number(hour) || 0,
-      purchaseType,
-      badge,
-    };
+    // 2. Implement Parsing and Validation
+    try {
+        if (typeof rawProductExplanation === 'string') {
+            finalProductExplanation = JSON.parse(rawProductExplanation);
+        } else if (Array.isArray(rawProductExplanation)) {
+             // Case where it was sent as a raw JSON array (good practice)
+            finalProductExplanation = rawProductExplanation;
+        }
 
-    if (req.file) {
-      updateData.imageUrl = `/uploads/${req.file.filename}`;
+        // --- Validation Check ---
+        if (!Array.isArray(finalProductExplanation)) {
+            // If it's not an array after parsing/checking
+            console.log("Raw productExplanation:", rawProductExplanation); 
+            return res.status(500).json({ 
+                success: false, 
+                message: "Invalid data: productExplanation must be an array." 
+            });
+        }
+        
+    } catch (e) {
+        // Handle JSON parsing error
+        console.error("Failed to parse productExplanation:", e);
+        return res.status(400).json({ 
+            success: false, 
+            message: "Invalid JSON format for productExplanation." 
+        });
     }
 
-    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    // 3. Construct updateData using the validated/parsed array
+    try {
+        let updateData = {
+            categoryName,
+            productName,
+            price,
+            cycleType,
+            cycleValue,
+            productExplanation: finalProductExplanation, // Use the parsed/validated array
+            daily: Number(daily) || 0,
+            hour: Number(hour) || 0,
+            purchaseType,
+            badge,
+            // REMOVED the duplicate 'productExplanation' field
+        };
 
-    if (!updatedProduct) return res.status(404).json({ success: false, message: "Product not found" });
+        if (req.file) {
+            updateData.imageUrl = `/uploads/${req.file.filename}`;
+        }
 
-    res.json({ success: true, product: updatedProduct });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
+        const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updateData, {
+            new: true,
+            runValidators: true,
+        });
+
+        if (!updatedProduct) return res.status(404).json({ success: false, message: "Product not found" });
+
+        res.json({ success: true, product: updatedProduct });
+    } catch (error) {
+        // Handle Mongoose/Database errors
+        res.status(500).json({ success: false, message: error.message });
+    }
 });
 
 // ---------------- DELETE product ----------------
