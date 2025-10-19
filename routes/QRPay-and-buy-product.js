@@ -183,7 +183,7 @@ QRPayRourter.patch("/api/admin/payments/:id", async (req, res) => {
     if (payment.userId && payment.utr) {
       const updateFields = {};
 
-      if (approved === "Approved") {
+      if (approved === "Approve") {
         updateFields.$inc = { balance: payment.amount };
       }
 

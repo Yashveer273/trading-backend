@@ -660,6 +660,41 @@ let otpResult = await sendOtpLess(phone,otp);
   }
 });
 
+UserRouter.post("/sendOtp", async (req, res) => {
+  
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Phone and OTP are required" });
+    }
+
+    // Check if user exists
+   
+ 
+      let otp = randomNumber(100000, 999999);
+let otpResult = await sendOtpLess(phone,otp);
+    console.log(otpResult)
+
+    if (!otpResult.success) {
+      return res
+        .status(500)
+        .json({ success: false, message: otpResult?.data?.message[0] });
+    }
+
+    res.json({
+      success: true,
+      message: "OTP sent successfully",
+      data: otpResult,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
 UserRouter.post("/update-password", async (req, res) => {
   try {
     console.log(req.body)

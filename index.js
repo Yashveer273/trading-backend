@@ -18,7 +18,7 @@ const luckySpinRouter = require("./routes/luckspin");
 const withdrawRoute = require("./routes/withdrawRoutes");
 const commissionRouter=require("./routes/CommissionRoutes");
 const ClaimRoiRouter= require("./routes/claimROI");
-
+const socialmediacontroller = require("./routes/socialmediacontroller");
 
 app.use("/api/products", productRoutes);
 app.use("/api/giftcodes", giftRouter);
@@ -28,6 +28,7 @@ app.use("/api/luckySpin", luckySpinRouter);
 app.use("/api/claimROI",ClaimRoiRouter);
 app.use("/api/withdraw", withdrawRoute);
 app.use("/api/commission", commissionRouter);
+app.use("/api/SocialMedia", socialmediacontroller);
 
 
 app.use("/uploads", express.static(path.join(__dirname, "routes/uploads")));
