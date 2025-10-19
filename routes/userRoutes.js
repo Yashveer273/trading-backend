@@ -695,7 +695,7 @@ let otpResult = await sendOtpLess(phone,otp);
   }
 });
 
-UserRouter.post("/update-password", async (req, res) => {
+UserRouter.post("/forget-password", async (req, res) => {
   try {
     console.log(req.body)
     const { phone, type, confirmPassword } = req.body;
@@ -719,7 +719,7 @@ UserRouter.post("/update-password", async (req, res) => {
     } else {
       return res.status(400).json({ success: false, message: "Invalid type" });
     }
-
+  const user = await User.findOne({ phone });
     // Update user using Mongo query by _id
     const result = await User.updateOne({ phone }, { $set: updateField });
 
@@ -728,13 +728,66 @@ UserRouter.post("/update-password", async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found" });
     }
-
-    res.json({ success: true, message: `${type} updated successfully` });
+ const token = jwt.sign({ phone: phone }, SECRET_KEY, {
+      expiresIn: "7d",
+    });
+    res.json({ success: true, message: `${type} updated successfully`,token,user });
   } catch (e) {
     console.error(e);
     res.status(500).json({ success: false, message: e.message });
   }
 });
+
+UserRouter.post("/Change-password", async (req, res) => {
+  try {
+    const { phone, type, currentPassword, confirmPassword } = req.body;
+
+    if (!phone || !type || !confirmPassword || !currentPassword) {
+      return res
+        .status(400)
+        .json({ success: false, message: "All fields are required" });
+    }
+
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Compare old password
+    if (user.password !== currentPassword) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Incorrect current password" });
+    }
+
+    let updateField = {};
+    if (type === "password") {
+      updateField.password = confirmPassword;
+    } else if (type === "tradePassword") {
+      updateField.tradePassword = confirmPassword;
+    } else {
+      return res.status(400).json({ success: false, message: "Invalid type" });
+    }
+
+    await User.updateOne({ phone }, { $set: updateField });
+    // Generate new JWT
+    const token = jwt.sign({ phone: User.phone }, SECRET_KEY, {
+      expiresIn: "7d",
+    });
+    res.json({
+      success: true,
+      token,
+      User,
+      message: `${type} updated successfully`,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+
+
 UserRouter.get("/tokenVerify", async (req, res) => {
   try {
     const { token, phone } = req.query;
