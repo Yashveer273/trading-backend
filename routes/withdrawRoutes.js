@@ -6,47 +6,62 @@ const User = require("../models/user");
 
 // ✅ Withdraw Request
 router.post("/", async (req, res) => {
-
   try {
     const { userId, amount, tradePassword } = req.body;
 
     if (!userId || !amount || !tradePassword) {
       return res.status(400).json({ success: false, message: "All fields are required" });
     }
- const timestamp = new Date();
-    // 🟢 Find user and validate trade password + bank details + balance + limit
+
+    const timestamp = new Date();
+
+    // 1️⃣ Find user and validate trade password + bank details
     const user = await User.findOne({
       _id: userId,
-      tradePassword: tradePassword,           // validate trade password directly in query
-      "bankDetails.accountNumber": { $exists: true, $ne: "" }, // ensure bank info exists
-      Withdrawal: { $gte: amount },              // sufficient balance
-      withdrawLimit: { $gte: amount },  
-      $push: {
-      withdrawHistory: {
-        amount,
-        user: userId,
-        status: "pending",
-        timestamp
-      },
-    },      // within withdraw limit
+      tradePassword: tradePassword,
+      "bankDetails.accountNumber": { $exists: true, $ne: "" },
     });
 
     if (!user) {
       return res.status(400).json({
         success: false,
-        message:
-          "User not found, invalid trade password, insufficient balance, or bank details missing",
+        message: "User not found, invalid trade password, or bank details missing",
       });
     }
 
-    // 🟢 Deduct balance atomically
-   await User.updateOne(
+    // 2️⃣ Validate requested withdrawal amount
+    if (amount > user.Withdrawal) {
+      return res.status(400).json({
+        success: false,
+        message: "Requested amount exceeds available balance",
+      });
+    }
+
+    if (amount < user.withdrawLimit) {
+      return res.status(400).json({
+        success: false,
+        message: `Requested amount less then withdrawal limit of ${user.withdrawLimit}`,
+      });
+    }
+
+    // 3️⃣ Deduct balance and push withdrawal history atomically
+    await User.updateOne(
       { _id: userId },
-      { $inc: { Withdrawal: -amount } } // decrement balance
+      {
+        $inc: { Withdrawal: -amount },
+        $push: {
+          withdrawHistory: {
+            amount,
+            user: userId,
+            status: "pending",
+            timestamp,
+          },
+        },
+      }
     );
 
-    // 🟢 Save withdrawal request
-    const withdraw = await Withdraw.create({ user: userId, amount,timestamp });
+    // 4️⃣ Save withdrawal request separately
+    const withdraw = await Withdraw.create({ user: userId, amount, timestamp });
 
     res.json({
       success: true,
@@ -58,6 +73,8 @@ router.post("/", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+
 
 
 
@@ -223,7 +240,7 @@ router.get("/bank", async (req, res) => {
     }
 
     // ✅ Fetch only bankDetails field (projection for efficiency)
-    const user = await User.findById(userId, { bankDetails: 1,balance: 1, _id: 0 });
+    const user = await User.findById(userId, { bankDetails: 1,Withdrawal: 1, _id: 0 });
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
@@ -243,7 +260,7 @@ router.get("/bank", async (req, res) => {
       success: true,
       message: "Bank details fetched successfully",
       bankDetails: user.bankDetails,
-      balance:user.balance
+      Withdrawal:user.Withdrawal
 
     });
   } catch (err) {
@@ -274,8 +291,8 @@ router.put("/bank-details/:userId", async (req, res) => {
 
     // 🔒 Compare trade password (assuming it's hashed in DB)
     const isPasswordMatch =
-      user.tradePassword === tradePassword ||
-      (await bcrypt.compare(tradePassword, user.tradePassword)); // if hashed
+      user.tradePassword === tradePassword
+      
 
     if (!isPasswordMatch) {
       return res.status(401).json({

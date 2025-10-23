@@ -20,18 +20,17 @@ const sendOtpLess = async (phoneNo, otp) => {
     const data = await response.json(); // response may be plain text, not JSON
     console.log("✅ OTP Send Response:", data);
 
-    return { success: data.return,data, otp };
+    return { success: data.return, data, otp };
   } catch (error) {
     console.error("❌ Error sending OTP:", error);
     return { success: false, message: error.message };
   }
 };
-   function randomNumber(min, max) {
+function randomNumber(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 const generateReferralCode = () =>
   Math.random().toString(36).substr(2, 6).toUpperCase();
-
 
 UserRouter.get("/user", async (req, res) => {
   const { userId } = req.query;
@@ -115,7 +114,6 @@ UserRouter.get("/:userId/withdraw-limit", async (req, res) => {
 });
 
 // Update Withdraw Limit (Admin / Testing)
-
 
 // POST /api/auth/register
 
@@ -290,7 +288,7 @@ UserRouter.post("/login", async (req, res) => {
     });
 
     // Save token in DB
-   
+
     await user.save();
 
     res.status(200).json({
@@ -430,7 +428,7 @@ UserRouter.get("/account_data", async (req, res) => {
   try {
     const { userId } = req.query;
 
-    const user = await User.findById(userId).select(
+    const user = await User.findOne({ phone: userId }).select(
       "totalBuy pendingIncome productIncome tasksReward Withdrawal balance"
     );
 
@@ -461,7 +459,7 @@ UserRouter.get("/purchase", async (req, res) => {
 
   try {
     // Fetch only what we need
-    const user = await User.findById(userId)
+    const user = await User.findOne({ phone: userId })
       .select("purchases rechargeHistory withdrawHistory")
       .lean();
 
@@ -621,7 +619,6 @@ UserRouter.post("/user-luckySpin-dataGet", async (req, res) => {
 });
 
 UserRouter.post("/verify", async (req, res) => {
-  
   try {
     const { phone } = req.body;
 
@@ -638,10 +635,10 @@ UserRouter.post("/verify", async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found" });
     }
- 
-      let otp = randomNumber(100000, 999999);
-let otpResult = await sendOtpLess(phone,otp);
-    console.log(otpResult)
+
+    let otp = randomNumber(100000, 999999);
+    let otpResult = await sendOtpLess(phone, otp);
+    console.log(otpResult);
 
     if (!otpResult.success) {
       return res
@@ -661,7 +658,6 @@ let otpResult = await sendOtpLess(phone,otp);
 });
 
 UserRouter.post("/sendOtp", async (req, res) => {
-  
   try {
     const { phone } = req.body;
 
@@ -672,11 +668,10 @@ UserRouter.post("/sendOtp", async (req, res) => {
     }
 
     // Check if user exists
-   
- 
-      let otp = randomNumber(100000, 999999);
-let otpResult = await sendOtpLess(phone,otp);
-    console.log(otpResult)
+
+    let otp = randomNumber(100000, 999999);
+    let otpResult = await sendOtpLess(phone, otp);
+    console.log(otpResult);
 
     if (!otpResult.success) {
       return res
@@ -697,7 +692,7 @@ let otpResult = await sendOtpLess(phone,otp);
 
 UserRouter.post("/forget-password", async (req, res) => {
   try {
-    console.log(req.body)
+    console.log(req.body);
     const { phone, type, confirmPassword } = req.body;
     // type = "password" or "tradePassword"
 
@@ -707,19 +702,17 @@ UserRouter.post("/forget-password", async (req, res) => {
         .json({ success: false, message: "All fields required" });
     }
 
-
     // Determine the field to update
     let updateField = {};
     if (type === "password") {
-        jwt.sign({ phone }, SECRET_KEY, { expiresIn: "7d" });
+      jwt.sign({ phone }, SECRET_KEY, { expiresIn: "7d" });
       updateField.password = confirmPassword;
-     
     } else if (type === "tradePassword") {
       updateField.tradePassword = confirmPassword;
     } else {
       return res.status(400).json({ success: false, message: "Invalid type" });
     }
-  const user = await User.findOne({ phone });
+    const user = await User.findOne({ phone });
     // Update user using Mongo query by _id
     const result = await User.updateOne({ phone }, { $set: updateField });
 
@@ -728,10 +721,15 @@ UserRouter.post("/forget-password", async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found" });
     }
- const token = jwt.sign({ phone: phone }, SECRET_KEY, {
+    const token = jwt.sign({ phone: phone }, SECRET_KEY, {
       expiresIn: "7d",
     });
-    res.json({ success: true, message: `${type} updated successfully`,token,user });
+    res.json({
+      success: true,
+      message: `${type} updated successfully`,
+      token,
+      user,
+    });
   } catch (e) {
     console.error(e);
     res.status(500).json({ success: false, message: e.message });
@@ -741,23 +739,33 @@ UserRouter.post("/forget-password", async (req, res) => {
 UserRouter.post("/Change-password", async (req, res) => {
   try {
     const { phone, type, currentPassword, confirmPassword } = req.body;
-
-    if (!phone || !type || !confirmPassword || !currentPassword) {
-      return res
-        .status(400)
-        .json({ success: false, message: "All fields are required" });
+    if (type === "password") {
+      if (!phone || !type || !confirmPassword || !currentPassword) {
+        return res
+          .status(400)
+          .json({ success: false, message: "All fields are required" });
+      }
+    } else {
+      if (!phone || !type || !confirmPassword) {
+        return res
+          .status(400)
+          .json({ success: false, message: "All fields are required" });
+      }
     }
 
     const user = await User.findOne({ phone });
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    // Compare old password
-    if (user.password !== currentPassword) {
       return res
-        .status(401)
-        .json({ success: false, message: "Incorrect current password" });
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+    if (type === "password") {
+      // Compare old password
+      if (user.password !== currentPassword) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Incorrect current password" });
+      }
     }
 
     let updateField = {};
@@ -786,14 +794,14 @@ UserRouter.post("/Change-password", async (req, res) => {
   }
 });
 
-
-
 UserRouter.get("/tokenVerify", async (req, res) => {
   try {
     const { token, phone } = req.query;
 
     if (!token || !phone) {
-      return res.status(400).json({ success: false, message: "Token and phone required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Token and phone required" });
     }
 
     // 🔹 Verify JWT
@@ -806,7 +814,9 @@ UserRouter.get("/tokenVerify", async (req, res) => {
 
     // 🔹 Check that decoded phone matches query phone
     if (decoded.phone !== phone) {
-      return res.status(403).json({ success: false, message: "Token does not match phone" });
+      return res
+        .status(403)
+        .json({ success: false, message: "Token does not match phone" });
     }
 
     return res.json({
@@ -821,22 +831,25 @@ UserRouter.get("/tokenVerify", async (req, res) => {
 });
 
 // -------------------------------------------------------
-// get  all user 
+// get  all user
 
 UserRouter.get("/all", async (req, res) => {
   try {
     const page = +req.query.page || 1;
     const limit = +req.query.limit || 10;
     const [users, total] = await Promise.all([
-      User.find().sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
-      User.countDocuments()
+      User.find()
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      User.countDocuments(),
     ]);
     res.json({
       success: true,
       page,
       totalPages: Math.ceil(total / limit),
       total,
-      users
+      users,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -882,27 +895,29 @@ UserRouter.get("/details/:id", async (req, res) => {
     const user = await User.findById(id, {
       phone: 1,
       referralCode: 1,
-      password:1,
-      tradePassword:1,
+      password: 1,
+      tradePassword: 1,
       balance: 1,
       totalBuy: 1,
-      productIncome:1,
+      productIncome: 1,
       pendingIncome: 1,
       withdrawLimit: 1,
-      tasksReward:1,
+      tasksReward: 1,
       luckySpin: 1,
       bankDetails: 1,
-      Withdrawal:1,
-      withdrawHistory:1,
-      rechargeHistory:1,
-      createdAt:1,
+      Withdrawal: 1,
+      withdrawHistory: 1,
+      rechargeHistory: 1,
+      createdAt: 1,
       team1: { $slice: 10 },
       team2: { $slice: 10 },
       team3: { $slice: 10 },
     });
 
     if (!user)
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     res.json({ success: true, user });
   } catch (err) {
@@ -918,7 +933,9 @@ UserRouter.get("/:id/team", async (req, res) => {
 
     // ✅ Validate team type
     if (!["team1", "team2", "team3"].includes(type)) {
-      return res.status(400).json({ success: false, message: "Invalid team type" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid team type" });
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -935,7 +952,9 @@ UserRouter.get("/:id/team", async (req, res) => {
     ]);
 
     if (!data.length)
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     const { totalCount, paginatedData } = data[0];
 
@@ -948,11 +967,10 @@ UserRouter.get("/:id/team", async (req, res) => {
       items: paginatedData,
     });
   } catch (err) {
-    console.log(err)
+    console.log(err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
-
 
 // GET /api/users/:id/purchases?page=1&limit=10
 UserRouter.get("/:id/purchases", async (req, res) => {
@@ -966,12 +984,17 @@ UserRouter.get("/:id/purchases", async (req, res) => {
     });
 
     if (!user)
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
-    const total = (await User.aggregate([
-      { $match: { _id: user._id } },
-      { $project: { count: { $size: "$purchases" } } },
-    ]))[0]?.count || 0;
+    const total =
+      (
+        await User.aggregate([
+          { $match: { _id: user._id } },
+          { $project: { count: { $size: "$purchases" } } },
+        ])
+      )[0]?.count || 0;
 
     res.json({
       success: true,
@@ -996,12 +1019,17 @@ UserRouter.get("/:id/withdraws", async (req, res) => {
     });
 
     if (!user)
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
-    const total = (await User.aggregate([
-      { $match: { _id: user._id } },
-      { $project: { count: { $size: "$withdrawHistory" } } },
-    ]))[0]?.count || 0;
+    const total =
+      (
+        await User.aggregate([
+          { $match: { _id: user._id } },
+          { $project: { count: { $size: "$withdrawHistory" } } },
+        ])
+      )[0]?.count || 0;
 
     res.json({
       success: true,
@@ -1025,12 +1053,17 @@ UserRouter.get("/:id/recharge", async (req, res) => {
     });
 
     if (!user)
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
-    const total = (await User.aggregate([
-      { $match: { _id: user._id } },
-      { $project: { count: { $size: "$rechargeHistory" } } },
-    ]))[0]?.count || 0;
+    const total =
+      (
+        await User.aggregate([
+          { $match: { _id: user._id } },
+          { $project: { count: { $size: "$rechargeHistory" } } },
+        ])
+      )[0]?.count || 0;
 
     res.json({
       success: true,
