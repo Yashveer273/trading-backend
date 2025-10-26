@@ -1,12 +1,17 @@
 const express = require("express");
 const User = require("../models/user");
+
+
+
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const UserRouter = express.Router();
 const SECRET_KEY = "SECRET_KEY12356789";
 // GET all users
 const Commission = require("../models/Commission");
-
+const Withdraw = require("../models/Withdraw");
+const Purchase = require("../models/purchase");
+const Payment = require("../models/payment");
 const sendOtpLess = async (phoneNo, otp) => {
   try {
     const dv_key = "1pULP3Aj0i"; // 🔹 Replace with your actual API key
@@ -113,6 +118,47 @@ UserRouter.get("/:userId/withdraw-limit", async (req, res) => {
   }
 });
 
+UserRouter.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1️⃣ Check if user exists
+    const existingUser = await User.findById(id);
+    if (!existingUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+  // 2️⃣ Delete all related records
+    const [deletedWithdraws, deletedPurchases, deletedPayments] = await Promise.all([
+      Withdraw.deleteMany({ user: id }),   // for Withdraw collection
+      Purchase.deleteMany({ userId: id }), // for Purchase collection
+      Payment.deleteMany({ userId: id })   // for Payment collection
+    ]);
+
+    // 3️⃣ Delete the user itself
+    await User.deleteOne({ _id: id });
+
+    // 4️⃣ Return a success response
+    res.json({
+      success: true,
+      message: "User and related data deleted successfully",
+      deleted: {
+        userId: id,
+        withdrawsDeleted: deletedWithdraws.deletedCount,
+        purchasesDeleted: deletedPurchases.deletedCount,
+        paymentsDeleted: deletedPayments.deletedCount
+      },
+    });
+  } catch (err) {
+    console.error("❌ User Delete Error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error while deleting user",
+    });
+  }
+});
 // Update Withdraw Limit (Admin / Testing)
 
 // POST /api/auth/register
@@ -475,7 +521,7 @@ UserRouter.get("/purchase", async (req, res) => {
       0
     );
     const totalWithdrawAmount = (user.withdrawHistory || []).reduce(
-      (sum, record) => sum + (record.amount || 0),
+      (sum, record) => sum + Number(record.amount || 0),
       0
     );
     // ✅ If only total requested

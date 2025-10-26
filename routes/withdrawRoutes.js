@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Withdraw = require("../models/Withdraw");
 const User = require("../models/user");
-
+const { default: mongoose } = require("mongoose");
 
 // ✅ Withdraw Request
 router.post("/", async (req, res) => {
@@ -10,11 +10,26 @@ router.post("/", async (req, res) => {
     const { userId, amount, tradePassword } = req.body;
 
     if (!userId || !amount || !tradePassword) {
-      return res.status(400).json({ success: false, message: "All fields are required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "All fields are required" });
     }
 
     const timestamp = new Date();
+   const startOfDay = new Date(timestamp.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(timestamp.setHours(23, 59, 59, 999));
 
+    const existingWithdraw = await Withdraw.findOne({
+      user: userId,
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+    });
+
+    if (existingWithdraw) {
+      return res.status(400).json({
+        success: false,
+        message: "You can only submit one withdraw request per day",
+      });
+    }
     // 1️⃣ Find user and validate trade password + bank details
     const user = await User.findOne({
       _id: userId,
@@ -25,7 +40,8 @@ router.post("/", async (req, res) => {
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: "User not found, invalid trade password, or bank details missing",
+        message:
+          "User not found, invalid trade password, or bank details missing",
       });
     }
 
@@ -44,6 +60,8 @@ router.post("/", async (req, res) => {
       });
     }
 
+    // 4️⃣ Save withdrawal request separately
+    const withdraw = await Withdraw.create({ user: userId, amount, timestamp });
     // 3️⃣ Deduct balance and push withdrawal history atomically
     await User.updateOne(
       { _id: userId },
@@ -53,16 +71,13 @@ router.post("/", async (req, res) => {
           withdrawHistory: {
             amount,
             user: userId,
+            _id: withdraw._id,
             status: "pending",
             timestamp,
           },
         },
       }
     );
-
-    // 4️⃣ Save withdrawal request separately
-    const withdraw = await Withdraw.create({ user: userId, amount, timestamp });
-
     res.json({
       success: true,
       message: "Withdraw request submitted",
@@ -74,14 +89,12 @@ router.post("/", async (req, res) => {
   }
 });
 
-
-
-
-
 // ✅ Get Withdraw History
 router.get("/history/:userId", async (req, res) => {
   try {
-    const history = await Withdraw.find({ user: req.params.userId }).sort({ createdAt: -1 });
+    const history = await Withdraw.find({ user: req.params.userId }).sort({
+      createdAt: -1,
+    });
     res.json({ success: true, history });
   } catch (err) {
     console.error("Withdraw History Error:", err);
@@ -111,7 +124,7 @@ router.get("/withdraw-statement", async (req, res) => {
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      history
+      history,
     });
   } catch (err) {
     console.error("Withdraw History Error:", err);
@@ -124,8 +137,8 @@ router.get("/withdraw-pending", async (req, res) => {
     // Fetch all pending withdrawals, sort newest first
     const pending = await Withdraw.find({ status: "pending" })
       .sort({ createdAt: -1 })
-      .populate("user", "name email") // optional: include user's name/email
-      .lean(); // faster, returns plain JS objects
+      .populate("user", "name email")
+      .lean();
 
     res.json({
       success: true,
@@ -141,22 +154,25 @@ router.get("/withdraw-pending", async (req, res) => {
 // Approve a withdrawal
 router.put("/withdraw-approve/:id", async (req, res) => {
   try {
-    
     const updated = await Withdraw.findByIdAndUpdate(
       req.params.id,
       { status: "approved" },
       { new: true }
     );
-    const timestamp = updated.timestamp;
-await User.updateOne(
-    { _id: req.params.id, "withdrawHistory.timestamp": timestamp },
-    {
-      $set: {
-        "withdrawHistory.$.status": "approved",
-        "withdrawHistory.$.approvedAt": new Date(), // optional: record approval time
+    const { user, _id } = updated;
+
+    await User.updateOne(
+      {
+        _id: user, // User document ID
+        "withdrawHistory._id": new mongoose.Types.ObjectId(_id), // Match withdrawHistory._id
       },
-    }
-  );
+      {
+        $set: {
+          "withdrawHistory.$.status": "approved",
+          "withdrawHistory.$.approvedAt": new Date(), // optional: record approval time
+        },
+      }
+    );
     res.json({ success: true, message: "Withdrawal approved", data: updated });
   } catch (error) {
     console.error("Error approving withdrawal:", error);
@@ -172,16 +188,24 @@ router.put("/withdraw-reject/:id", async (req, res) => {
       { status: "rejected" },
       { new: true }
     );
-    const timestamp = updated.timestamp;
-await User.updateOne(
-    { _id: req.params.id, "withdrawHistory.timestamp": timestamp },
-    {
-      $set: {
-        "withdrawHistory.$.status": "rejected",
-        "withdrawHistory.$.rejectedAt": new Date(), // optional: record approval time
+    const { user, _id, amount } = updated;
+    const numericAmount = Number(amount) || 0;
+    console.log(_id);
+    const userUpdate = await User.updateOne(
+      {
+        _id: user, // User document ID
+        "withdrawHistory._id": new mongoose.Types.ObjectId(_id), // Match withdrawHistory._id
       },
-    }
-  );
+      {
+        $set: {
+          "withdrawHistory.$.status": "rejected",
+          "withdrawHistory.$.rejectedAt": new Date(),
+        },
+        $inc: { Withdrawal: numericAmount },
+      }
+    );
+
+    console.log(userUpdate);
     res.json({ success: true, message: "Withdrawal rejected", data: updated });
   } catch (error) {
     console.error("Error rejecting withdrawal:", error);
@@ -192,11 +216,14 @@ await User.updateOne(
 // ✅ Save Bank Details (only once or update if needed)
 router.post("/bank-details", async (req, res) => {
   try {
-    const { userId, holderName, accountNumber, ifscCode, bankName, upiId } = req.body;
+    const { userId, holderName, accountNumber, ifscCode, bankName, upiId } =
+      req.body;
 
     // Validate
     if (!userId) {
-      return res.status(400).json({ success: false, message: "userId is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "userId is required" });
     }
 
     // ✅ MongoDB query update
@@ -215,7 +242,9 @@ router.post("/bank-details", async (req, res) => {
     );
 
     if (!updatedUser) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     res.json({
@@ -229,21 +258,27 @@ router.post("/bank-details", async (req, res) => {
   }
 });
 
-
 router.get("/bank", async (req, res) => {
- 
   try {
     const { userId } = req.query;
 
     if (!userId) {
-      return res.status(400).json({ success: false, message: "User ID is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "User ID is required" });
     }
 
     // ✅ Fetch only bankDetails field (projection for efficiency)
-    const user = await User.findById(userId, { bankDetails: 1,Withdrawal: 1, _id: 0 });
+    const user = await User.findById(userId, {
+      bankDetails: 1,
+      Withdrawal: 1,
+      _id: 0,
+    });
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     // ✅ If no bank details saved yet
@@ -260,8 +295,7 @@ router.get("/bank", async (req, res) => {
       success: true,
       message: "Bank details fetched successfully",
       bankDetails: user.bankDetails,
-      Withdrawal:user.Withdrawal
-
+      Withdrawal: user.Withdrawal,
     });
   } catch (err) {
     console.error("Get Bank Details Error:", err);
@@ -286,13 +320,13 @@ router.put("/bank-details/:userId", async (req, res) => {
     const user = await User.findById(userId);
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     // 🔒 Compare trade password (assuming it's hashed in DB)
-    const isPasswordMatch =
-      user.tradePassword === tradePassword
-      
+    const isPasswordMatch = user.tradePassword === tradePassword;
 
     if (!isPasswordMatch) {
       return res.status(401).json({
