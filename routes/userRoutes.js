@@ -117,6 +117,36 @@ UserRouter.get("/:userId/withdraw-limit", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+// GET /api/users/search?query=<phone-or-id>
+
+
+UserRouter.get("/search", async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query) {
+      return res.status(400).json({ success: false, message: "Query is required" });
+    }
+
+    // Check if query is a valid ObjectId
+    const isObjectId = mongoose.Types.ObjectId.isValid(query);
+
+    // Search by phone OR _id (only if valid ObjectId)
+    const user = await User.findOne({
+      $or: isObjectId ? [{ phone: query }, { _id: query }] : [{ phone: query }],
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({ success: true,user: [user] });
+  } catch (err) {
+    console.error("Search error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 
 UserRouter.delete("/:id", async (req, res) => {
   try {
@@ -1122,4 +1152,6 @@ UserRouter.get("/:id/recharge", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+
 module.exports = UserRouter;
