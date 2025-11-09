@@ -23,6 +23,29 @@ ClaimRoiRouter.get("/", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+ClaimRoiRouter.post("/P_exp", async (req, res) => {
+  try {
+    const { userId, productId, exp } = req.body;
+console.log(req.body)
+    if (!userId || !productId || exp === undefined) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+
+    const result = await User.updateOne(
+      { _id: userId, "purchases.productId": productId },
+      { $set: { "purchases.$.exp": exp } }
+    );
+
+    
+      return res.json({ success: true, message: "Exp updated successfully" });
+    
+  } catch (error) {
+    console.error("Error updating exp:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 
 ClaimRoiRouter.post("/add", async (req, res) => {
   try {
@@ -57,11 +80,14 @@ ClaimRoiRouter.post("/add", async (req, res) => {
     const purchase = user.purchases.find(
       (p) => p.productId.toString() === productId
     );
+
     if (!purchase)
       return res
         .status(404)
         .json({ success: false, message: "Purchase not found" });
-    if (isCycleComplete) {
+            const { exp} =
+        purchase;
+    if (exp||isCycleComplete) {
       const { cycleType, cycleValue, dailyIncome, createdAt, claim, quantity } =
         purchase;
 
@@ -85,12 +111,14 @@ ClaimRoiRouter.post("/add", async (req, res) => {
         const diffHours = diffMs / (1000 * 60 * 60);
         if (diffHours >= cycleValue) isCycleComplete = true;
       }
-
-      if (!isCycleComplete) {
+if (!exp || exp === undefined) {
+   if (!isCycleComplete) {
         return res
           .status(400)
           .json({ success: false, message: "Cycle not yet complete" });
       }
+        }
+     
 
       const claimAmount = cycleValue * dailyIncome * quantity;
 
@@ -134,4 +162,6 @@ ClaimRoiRouter.post("/add", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+
 module.exports = ClaimRoiRouter;

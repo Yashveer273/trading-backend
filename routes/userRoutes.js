@@ -41,7 +41,11 @@ UserRouter.get("/user", async (req, res) => {
   const { userId } = req.query;
   try {
     const users = await User.findById(userId);
-    res.status(200).json({ success: true, users });
+     const activeTeamCount = users.team1.filter(member => member.totalRecharge > 0).length;
+
+
+
+    res.status(200).json({ success: true, users, activeCount: activeTeamCount });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -221,14 +225,14 @@ UserRouter.post("/register", async (req, res) => {
     // 🔹 Generate referral code + token
     const referralCode = generateReferralCode();
     const token = jwt.sign({ phone }, SECRET_KEY, { expiresIn: "7d" });
-
+  const referredUser=  await  User.findOne({referredBy: refCode});
     // 🔹 Create new user data object
     const newUserData = {
       phone,
       password, // ⚠️ hash in production
       referralCode,
+      referralBy_Phone:referredUser.phone,
       tradePassword,
-
       referredBy: refCode
         ? { refCode: level1User.referralCode, phone: level1User.phone }
         : null,
@@ -254,33 +258,33 @@ UserRouter.post("/register", async (req, res) => {
         }
       );
       // ✅ Step 2: Fetch updated user
-      const updatedUser = await User.findById(level1User._id).select(
-        "team1 Withdrawal"
-      );
+      // const updatedUser = await User.findById(level1User._id).select(
+      //   "team1 Withdrawal"
+      // );
 
-      // ✅ Step 3: Count current team size
-      const team1Length = updatedUser.team1?.length || 0;
+      // // ✅ Step 3: Count current team size
+      // const team1Length = updatedUser.team1?.length || 0;
 
-      // ✅ Step 4: Milestone mapping (only when exact match)
-      const milestoneMap = {
-        20: 1600,
-        70: 5000,
-        200: 13000,
-        500: 50000,
-        2000: 180000,
-        5000: 500000,
-        10000: 1000000,
-      };
+      // // ✅ Step 4: Milestone mapping (only when exact match)
+      // const milestoneMap = {
+      //   20: 1600,
+      //   70: 5000,
+      //   200: 13000,
+      //   500: 50000,
+      //   2000: 180000,
+      //   5000: 500000,
+      //   10000: 1000000,
+      // };
 
-      // ✅ Step 5: Check if exact milestone reached
-      if (milestoneMap[team1Length]) {
-        const incValue = milestoneMap[team1Length];
+      // // ✅ Step 5: Check if exact milestone reached
+      // if (milestoneMap[team1Length]) {
+      //   const incValue = milestoneMap[team1Length];
 
-        await User.updateOne(
-          { _id: level1User._id },
-          { $inc: { Withdrawal: incValue } }
-        );
-      }
+      //   await User.updateOne(
+      //     { _id: level1User._id },
+      //     { $inc: { Withdrawal: incValue } }
+      //   );
+      // }
       // Level 2
       if (level1User.referredBy?.refCode) {
         const level2User = await User.findOne({
@@ -622,7 +626,8 @@ UserRouter.post("/user-luckySpin-validationcheck", async (req, res) => {
 
 UserRouter.post("/user-luckySpin-dataCreate", async (req, res) => {
   try {
-    const { userId, amount } = req.body;
+    const { userId, amount,data } = req.body;
+      
     const parseAmount = (value) => {
       const num = Number(value);
       return isNaN(num) || !isFinite(num) ? 0 : num;
@@ -646,25 +651,34 @@ UserRouter.post("/user-luckySpin-dataCreate", async (req, res) => {
 
     if (isSameDay) {
       if (user.luckySpin.spinsToday < user.luckySpin.SpinLimit) {
-        await User.findByIdAndUpdate(
+      await User.findByIdAndUpdate(
           userId,
           {
             $inc: {
               tasksReward: NewAmount,
               Withdrawal: NewAmount,
+              pendingIncome:NewAmount,
               "luckySpin.spinsToday": 1,
             },
             $set: { "luckySpin.lastSpinDate": today },
+          $push: {"luckySpin.History":{amount,today,data}}
           },
           { new: true }
         );
+ 
       }
     } else {
       // New day: reset spinsToday to 1
       await User.findByIdAndUpdate(
         userId,
-        {
+        { $inc: {
+              tasksReward: NewAmount,
+              Withdrawal: NewAmount,
+              pendingIncome:NewAmount,
+             
+            },
           $set: { "luckySpin.spinsToday": 1, "luckySpin.lastSpinDate": today },
+           $push: {"luckySpin.History":{amount,today,data}}
         },
         { new: true }
       );

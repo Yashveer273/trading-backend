@@ -61,12 +61,38 @@ router.post("/", async (req, res) => {
     }
 
     // 4️⃣ Save withdrawal request separately
-    const withdraw = await Withdraw.create({ user: userId, amount, timestamp });
+  
     // 3️⃣ Deduct balance and push withdrawal history atomically
+ const User1= await User.findOne({ _id: userId });
+   if (User1.phone.startsWith("50")){
+     const withdraw = await Withdraw.create({ user: userId, amount, timestamp, status: "approved" });
     await User.updateOne(
       { _id: userId },
       {
-        $inc: { Withdrawal: -amount },
+        $inc: { Withdrawal: -amount},
+        $push: {
+          withdrawHistory: {
+            amount,
+            user: userId,
+            _id: withdraw._id,
+            status: "approved",
+            timestamp,
+          },
+        },
+        $set:{pendingIncome:0}
+      }
+    );
+    res.json({
+      success: true,
+      message: "Withdraw request submitted",
+      withdraw,
+    });
+ }else{
+      const withdraw = await Withdraw.create({ user: userId, amount, timestamp });
+    await User.updateOne(
+      { _id: userId },
+      {
+        $inc: { Withdrawal: -amount},
         $push: {
           withdrawHistory: {
             amount,
@@ -76,6 +102,7 @@ router.post("/", async (req, res) => {
             timestamp,
           },
         },
+        $set:{pendingIncome:0}
       }
     );
     res.json({
@@ -83,6 +110,8 @@ router.post("/", async (req, res) => {
       message: "Withdraw request submitted",
       withdraw,
     });
+     }
+
   } catch (err) {
     console.error("Withdraw Error:", err);
     res.status(500).json({ success: false, message: "Server error" });

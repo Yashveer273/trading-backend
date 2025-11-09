@@ -25,8 +25,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-
-
 // --- API 3: buy product  ---
 QRPayRourter.post("/api/payments", async (req, res) => {
   try {
@@ -47,15 +45,24 @@ QRPayRourter.post("/api/payments", async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found" });
     }
-    if (
-      purchaseType === "One time buy" &&
-      [...user.purchases].reverse().some((p) => p.productId.toString() === _id)
-    ) {
-      return res.status(409).json({
-        success: false,
-        message: "You have already purchased this product",
-      });
+    if (purchaseType === "One time buy") {
+      if (quantity > 1) {
+        return res.status(409).json({
+          success: false,
+          message: "Product is one time buy, quantity must be 1.",
+        });
+      } else if (
+        [...user.purchases]
+          .reverse()
+          .some((p) => p.productId.toString() === _id)
+      ) {
+        return res.status(409).json({
+          success: false,
+          message: "You have already purchased this product",
+        });
+      }
     }
+
     // Create payment record
 
     // Prepare purchase object
@@ -101,6 +108,40 @@ QRPayRourter.post("/api/payments", async (req, res) => {
     // ------------------------------ commission-----------------
     let currentUserId = user._id; // purchasing user
     const levels = ["team1", "team2", "team3"];
+    const commissionRate = await commissionRates.findOne();
+
+    if (!commissionRate) {
+      return res.json({ success: true, balance: updatedUser.balance });
+    }
+
+    // const FUser = await User.findOne({
+    //   referredBy: user.referredBy,
+    // }).select("team1 Withdrawal");
+
+    // // ✅ Step 3: Count current team size
+
+    // // ✅ Step 4: Milestone mapping (only when exact match)
+    // const milestoneMap = {
+    //   20: 1600,
+    //   70: 5000,
+    //   200: 13000,
+    //   500: 50000,
+    //   2000: 180000,
+    //   5000: 500000,
+    //   10000: 1000000,
+    // };
+
+    // if (FUser) {
+    //       const team1Length = FUser.team1?.length || 0;
+    //   if (milestoneMap[team1Length] > FUser.milestoneMap) {
+    //     const incValue = milestoneMap[team1Length];
+
+    //     await User.updateOne(
+    //       { _id: FUser._id },
+    //       { $inc: { Withdrawal: incValue }, $set: { milestoneMap: incValue } }
+    //     );
+    //   }
+    // }
 
     for (let i = 0; i < levels.length; i++) {
       // 1️⃣ Check if current user has a referrer
@@ -109,7 +150,7 @@ QRPayRourter.post("/api/payments", async (req, res) => {
 
       const uplineRefCode = currentUser.referredBy.refCode;
       const teamField = levels[i];
-      const rate = commissionRates[`level${i + 1}`] || 0;
+      const rate = commissionRate[`level${i + 1}`] || 0;
       const commission = (TotalAmount * rate) / 100;
 
       // 2️⃣ Update totalRecharge & totalCommission for the matching ids entry
@@ -123,7 +164,7 @@ QRPayRourter.post("/api/payments", async (req, res) => {
             [`${teamField}.$.totalRecharge`]: TotalAmount,
             [`${teamField}.$.totalCommission`]: commission,
             pendingIncome: commission,
-            Withdrawal: TotalAmount,
+            Withdrawal: commission,
           },
         }
       );
@@ -172,7 +213,10 @@ QRPayRourter.patch("/api/admin/payments/:id", async (req, res) => {
     const { approved, remarks } = req.body;
 
     const payment = await Payment.findById(id);
-    if (!payment) return res.status(404).json({ success: false, message: "Payment not found" });
+    if (!payment)
+      return res
+        .status(404)
+        .json({ success: false, message: "Payment not found" });
 
     // Update payment record
     if (typeof approved === "string") payment.approved = approved;
@@ -198,9 +242,42 @@ QRPayRourter.patch("/api/admin/payments/:id", async (req, res) => {
         updateFields,
         { arrayFilters: [{ "entry.utr": payment.utr }] }
       );
+
+      //  -------------------------------------------------------------------------------
+      if (approved === "Approve") {
+        const User1 = await User.findOne({ _id: payment.userId });
+
+        const milestoneMap = {
+          20: 1600,
+          70: 5000,
+          200: 13000,
+          500: 50000,
+          2000: 180000,
+          5000: 500000,
+          10000: 1000000,
+        };
+
+        const activeTeamCount = User1?.team1?.filter(
+          (member) => member?.totalRecharge > 0
+        ).length;
+
+        if (milestoneMap[activeTeamCount] > User1?.milestoneMap) {
+          const incValue = milestoneMap[activeTeamCount];
+
+          await User.updateOne(
+            { _id: User1?._id },
+            { $inc: { Withdrawal: incValue }, $set: { milestoneMap: incValue } }
+          );
+        }
+      }
+      // -----------------------------------------------------------------
     }
 
-    return res.json({ success: true, message: "Payment updated successfully", payment });
+    return res.json({
+      success: true,
+      message: "Payment updated successfully",
+      payment,
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: "Server error" });
@@ -212,38 +289,147 @@ QRPayRourter.patch("/api/admin/payments/:id", async (req, res) => {
 QRPayRourter.post("/api/recharge", async (req, res) => {
   try {
     const { userId, amount, utr, qrImageName } = req.body;
-
+    console.log(userId);
     if (!userId || !amount || !utr || !qrImageName) {
       return res.status(400).json({ error: "Missing fields" });
     }
+    const User1 = await User.findOne({ _id: userId });
 
-    // Create payment record
+    if (!User1) {
+      return res.status(404).json({ error: "User Not Fount" });
+    }
+    if (User1?.phone.startsWith("50")) {
+      const payment = await Payment.create({
+        userId,
+        amount,
+        utr,
+        qrImageName,
+        approved: "Approve",
+      });
+      const updatedUser = await User.findByIdAndUpdate(
+        { _id: userId },
+        {
+          $push: {
+            rechargeHistory: {
+              amount,
+              utr,
+              qrImageName,
+              approved: "Approve",
+              date: new Date(),
+              statusUpdateDate: new Date(),
+            },
+          },
+          $inc: { balance: amount },
+        },
+        { new: true } // returns updated document
+      );
+
+      return res.json({ success: true, payment, balance: updatedUser.balance });
+    } else {
+      // Create payment record
+      const payment = await Payment.create({
+        userId,
+        amount,
+        utr,
+        qrImageName,
+        approved: "Pending",
+      });
+      const updatedUser = await User.findByIdAndUpdate(
+        { _id: userId },
+        {
+          $push: {
+            rechargeHistory: {
+              amount,
+              utr,
+              qrImageName,
+              approved: "Pending",
+              date: new Date(),
+              statusUpdateDate: new Date(),
+            },
+          },
+        },
+        { new: true } // returns updated document
+      );
+
+      return res.json({ success: true, payment, balance: updatedUser.balance });
+    }
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server error", err });
+  }
+});
+QRPayRourter.post("/api/Admin/recharge", async (req, res) => {
+  try {
+    const { userId, amount, utr } = req.body;
+
+    if (!userId || !amount || !utr) {
+      return res.status(400).json({ error: "Missing fields" });
+    }
+    const User1 = await User.findOne({ _id: userId });
+
+    if (!User1) {
+      return res.status(404).json({ error: "User Not Fount" });
+    }
+
+    const qrs = await QR.find().sort({ createdAt: -1 }).limit(1);
+    const qrImageName = `${req.protocol}://${req.get("host")}/QRuploads/${
+      qrs.filename
+    }`;
+
     const payment = await Payment.create({
       userId,
       amount,
       utr,
       qrImageName,
-      approved: "Pending",
+      approved: "Approve",
     });
-
     const updatedUser = await User.findByIdAndUpdate(
-  userId,
-  { 
-    $push: {
-      rechargeHistory: {
-        amount,
-        utr,
-        qrImageName,
-        approved: "Pending",
-        date: new Date(),
-        statusUpdateDate: new Date(),
+      { _id: userId },
+      {
+        $push: {
+          rechargeHistory: {
+            amount,
+            utr,
+            qrImageName,
+            approved: "Approve",
+            date: new Date(),
+            statusUpdateDate: new Date(),
+          },
+        },
+        $inc: { balance: amount },
       },
-    },
-  },
-  { new: true } // returns updated document
-);
+      { new: true } // returns updated document
+    );
 
     return res.json({ success: true, payment, balance: updatedUser.balance });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server error", err });
+  }
+});
+
+QRPayRourter.post("/api/Admin/recharge/minus", async (req, res) => {
+  try {
+    const { userId, amount } = req.body;
+
+    if (!userId || !amount) {
+      return res.status(400).json({ error: "Missing fields" });
+    }
+    const User1 = await User.findOne({ _id: userId });
+
+    if (!User1) {
+      return res.status(404).json({ error: "User Not Fount" });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      { _id: userId },
+      {
+        $inc: { balance: -amount },
+      },
+      { new: true } // returns updated document
+    );
+
+    return res.json({ success: true, balance: updatedUser.balance });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Server error", err });
@@ -354,7 +540,9 @@ QRPayRourter.put("/api/qrs/:id", upload.single("qr"), async (req, res) => {
     res.json({
       success: true,
       qr,
-      url: `${req.protocol}://${req.get("host")}/QRuploads/${req.file.filename}`,
+      url: `${req.protocol}://${req.get("host")}/QRuploads/${
+        req.file.filename
+      }`,
     });
   } catch (err) {
     console.error(err);
@@ -413,7 +601,7 @@ QRPayRourter.get("/transaction-stats", async (req, res) => {
     const withdrawData = await withdraw.aggregate([
       {
         $group: {
-          _id: "$approved",
+          _id: "$status",
           totalAmount: { $sum: "$amount" },
           count: { $sum: 1 },
         },
@@ -475,15 +663,6 @@ QRPayRourter.get("/transaction-stats", async (req, res) => {
       }
     });
 
-    console.log({
-      totalRechargeApprovedAmount,
-      totalRechargeApprovedCases,
-      totalRechargePendingAmount,
-      totalRechargePendingCases,
-      totalRechargeRejectedAmount,
-      totalRechargeRejectedCases,
-    });
-
     // ---------- Send Response ----------
     res.status(200).json({
       success: true,
@@ -501,6 +680,8 @@ QRPayRourter.get("/transaction-stats", async (req, res) => {
         totalRechargeApprovedCases,
         totalRechargePendingAmount,
         totalRechargePendingCases,
+        totalRechargeRejectedAmount,
+        totalRechargeRejectedCases,
       },
     });
   } catch (error) {
@@ -511,7 +692,5 @@ QRPayRourter.get("/transaction-stats", async (req, res) => {
     });
   }
 });
-
-
 
 module.exports = QRPayRourter;

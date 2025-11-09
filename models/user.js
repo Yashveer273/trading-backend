@@ -6,12 +6,14 @@ const referralStageSchema = new mongoose.Schema({
   totalRecharge: { type: Number, default: 0 },
   totalCommission: { type: Number, default: 0 },
   ids: [{ phone: String,person:String }],
+  
 });
 
 const luckySpinSchema = new mongoose.Schema({
   SpinLimit: { type: Number, default: 1 }, // how many spins user has done today
   lastSpinDate: { type: Date, default: null }, // last spin date
-  spinsToday: { type: Number, default: 1 }, 
+  spinsToday: { type: Number, default: 1 },
+  History: { type: Array, default: [] },
   createdAt: { type: Date, default: Date.now },
 });
 const referredBySchema = new mongoose.Schema(
@@ -33,7 +35,8 @@ const userSchema = new mongoose.Schema({
     team1: [referralStageSchema], // Stage 1 (Level 1)
     team2: [referralStageSchema], // Stage 2 (Level 2)
     team3: [referralStageSchema], // Stage 3 (Level 3)
-
+  milestoneMap:{ type: Number, default: 0 },
+  referralBy_Phone:{ type: Number, default: 0 },
   totalBuy: { type: Number, default: 0 },
   pendingIncome: { type: Number, default: 0 },
   productIncome: { type: Number, default: 0 },
