@@ -19,7 +19,7 @@ const withdrawRoute = require("./routes/withdrawRoutes");
 const commissionRouter=require("./routes/CommissionRoutes");
 const ClaimRoiRouter= require("./routes/claimROI");
 const socialmediacontroller = require("./routes/socialmediacontroller");
-
+const upiRoutes = require("./routes/upi");
 app.use("/api/products", productRoutes);
 app.use("/api/giftcodes", giftRouter);
 app.use("/api/users", userRouter);
@@ -30,6 +30,7 @@ app.use("/api/withdraw", withdrawRoute);
 app.use("/api/commission", commissionRouter);
 app.use("/api/SocialMedia", socialmediacontroller);
 
+app.use("/api/upi", upiRoutes);
 
 app.use("/uploads", express.static(path.join(__dirname, "routes/uploads")));
 // Serve uploaded files as network URLs
