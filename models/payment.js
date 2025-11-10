@@ -8,7 +8,7 @@ const PaymentSchema = new mongoose.Schema({
   utr: { type: String, required: true,unique: true, },
   qrImageName: { type: String, required: true },
   approved: { type: String, default: "Pending" },
-  
+  phone:{ type: Number, default: 0 },
  
   createdAt: { type: Date, default: Date.now },
 });

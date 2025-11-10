@@ -7,6 +7,7 @@ const productSchema = new mongoose.Schema(
     price: { type: Number, required: true },
     cycleType: { type: String, enum: ["day", "hour"], required: true },
     cycleValue: { type: Number, required: true },
+    isdailyClaim:{ type: Boolean, default: false },
     daily: { type: Number, default: 0 },
     hour: { type: Number, default: 0 },  
     totalIncomeDay: { type: Number, default: 0 },  

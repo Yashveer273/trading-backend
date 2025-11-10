@@ -26,7 +26,7 @@ router.post("/add", upload.single("image"), async (req, res) => {
 
  
   try {
-    const { categoryName, productName, price, cycleType, cycleValue, daily, hour,purchaseType, badge,productExplanation } = req.body;
+    const { categoryName, productName, price, cycleType, cycleValue, daily, hour,purchaseType, badge,productExplanation,isdailyClaim } = req.body;
     var pExplanation=[];
     
 if (typeof productExplanation === 'string') {
@@ -48,11 +48,12 @@ if (typeof productExplanation === 'string') {
 
     const newProduct = new Product({
       categoryName,
+      isdailyClaim,
       productName,
       price,
       cycleType,
       cycleValue,
-       productExplanation:pExplanation,
+      productExplanation:pExplanation,
       daily: Number(daily) || 0,
       hour: Number(hour) || 0,
       imageUrl,

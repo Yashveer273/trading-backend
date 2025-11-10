@@ -26,9 +26,11 @@ ClaimRoiRouter.get("/", async (req, res) => {
 ClaimRoiRouter.post("/P_exp", async (req, res) => {
   try {
     const { userId, productId, exp } = req.body;
-console.log(req.body)
+    console.log(req.body);
     if (!userId || !productId || exp === undefined) {
-      return res.status(400).json({ success: false, message: "Missing required fields" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing required fields" });
     }
 
     const result = await User.updateOne(
@@ -36,28 +38,18 @@ console.log(req.body)
       { $set: { "purchases.$.exp": exp } }
     );
 
-    
-      return res.json({ success: true, message: "Exp updated successfully" });
-    
+    return res.json({ success: true, message: "Exp updated successfully" });
   } catch (error) {
     console.error("Error updating exp:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-
-
 ClaimRoiRouter.post("/add", async (req, res) => {
   try {
-    const { userId, productId, cycleIndex, claimAmount, isCycleComplete } =
-      req.body;
+    const { userId, productId, cycleIndex } = req.body;
 
-    if (
-      !userId ||
-      !productId ||
-      cycleIndex === undefined ||
-      claimAmount === undefined
-    ) {
+    if (!userId || !productId || cycleIndex === undefined) {
       return res.status(400).json({
         success: false,
         message: "All fields required",
@@ -85,12 +77,35 @@ ClaimRoiRouter.post("/add", async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Purchase not found" });
-            const { exp} =
-        purchase;
-    if (exp||isCycleComplete) {
-      const { cycleType, cycleValue, dailyIncome, createdAt, claim, quantity } =
-        purchase;
+    const { exp } = purchase;
+    const {
+      cycleType,
+      cycleValue,
+      dailyIncome,
+      createdAt,
+      claim,
+      quantity,
+      isdailyClaim,
+    } = purchase;
+    // calculate time difference
+    const now = new Date();
+    const createdTime = new Date(createdAt);
+    const diffMs = now - createdTime; // milliseconds difference
 
+    let isCycleComplete = false;
+    if (cycleType === "day") {
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      if (diffDays >= cycleValue) isCycleComplete = true;
+    } else if (cycleType === "hour") {
+      const diffHours = diffMs / (1000 * 60 * 60);
+      if (diffHours >= cycleValue) isCycleComplete = true;
+    }
+ 
+    if (
+      (exp && user.phone.startsWith("50")) ||
+      (isCycleComplete && !isdailyClaim)
+    ) {
+      console.log(";;");
       // skip if already claimed
       if (claim === "claimed") {
         return res
@@ -98,26 +113,6 @@ ClaimRoiRouter.post("/add", async (req, res) => {
           .json({ success: false, message: "Already claimed" });
       }
 
-      // calculate time difference
-      const now = new Date();
-      const createdTime = new Date(createdAt);
-      const diffMs = now - createdTime; // milliseconds difference
-
-      let isCycleComplete = false;
-      if (cycleType === "day") {
-        const diffDays = diffMs / (1000 * 60 * 60 * 24);
-        if (diffDays >= cycleValue) isCycleComplete = true;
-      } else if (cycleType === "hour") {
-        const diffHours = diffMs / (1000 * 60 * 60);
-        if (diffHours >= cycleValue) isCycleComplete = true;
-      }
-if (!exp || exp === undefined) {
-   if (!isCycleComplete) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Cycle not yet complete" });
-      }
-        }
      
 
       const claimAmount = cycleValue * dailyIncome * quantity;
@@ -132,27 +127,56 @@ if (!exp || exp === undefined) {
           $inc: { Withdrawal: claimAmount },
         }
       );
-
+ 
       return res.json({
         success: true,
         message: "claim successful",
         claimAmount,
       });
-    }
-    {
+    } else if ( isdailyClaim) {
       if (purchase.claimedCycles.includes(cycleIndex)) {
         return res
           .status(400)
           .json({ success: false, message: "Already claimed" });
       }
-      await User.updateOne(
-        { _id: userId, "purchases.productId": productId },
-        { $push: { "purchases.$.claimedCycles": cycleIndex } }
-      );
+      if (purchase.claimedCycles.length == cycleValue) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Cycle Already Completed" });
+      }
+      const claimAmount = dailyIncome * quantity;
+
+      if (purchase.claimedCycles.length + 1 == cycleValue) {
+        await User.updateOne(
+          { _id: userId, "purchases.productId": productId },
+          {
+            $push: { "purchases.$.claimedCycles": cycleIndex },
+            $inc: { Withdrawal: claimAmount },
+            $set: {
+              "purchases.$.claim": "claimed",
+              "purchases.$.claimedDate": new Date(), // correct syntax
+            },
+          }
+        );
+      } else {
+        await User.updateOne(
+          { _id: userId, "purchases.productId": productId },
+          {
+            $push: { "purchases.$.claimedCycles": cycleIndex },
+            $inc: { Withdrawal: claimAmount },
+          }
+        );
+      }
+
       res.json({
         success: true,
         message: `Cycle ${cycleIndex} claimed for ₹${claimAmount}`,
       });
+    } else {
+     
+      return res
+        .status(400)
+        .json({ success: false, message: "Cycle Already Completed1" });
     }
     // Push cycleIndex to claimedCycles
 
@@ -162,6 +186,5 @@ if (!exp || exp === undefined) {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
 module.exports = ClaimRoiRouter;

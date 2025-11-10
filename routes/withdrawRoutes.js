@@ -88,7 +88,7 @@ router.post("/", async (req, res) => {
       withdraw,
     });
  }else{
-      const withdraw = await Withdraw.create({ user: userId, amount, timestamp });
+      const withdraw = await Withdraw.create({ user: userId, amount, timestamp,phone: User1.phone });
     await User.updateOne(
       { _id: userId },
       {
@@ -299,6 +299,7 @@ router.get("/bank", async (req, res) => {
 
     // ✅ Fetch only bankDetails field (projection for efficiency)
     const user = await User.findById(userId, {
+    
       bankDetails: 1,
       Withdrawal: 1,
       _id: 0,
@@ -325,6 +326,7 @@ router.get("/bank", async (req, res) => {
       message: "Bank details fetched successfully",
       bankDetails: user.bankDetails,
       Withdrawal: user.Withdrawal,
+
     });
   } catch (err) {
     console.error("Get Bank Details Error:", err);
@@ -372,6 +374,7 @@ router.put("/bank-details/:userId", async (req, res) => {
       success: true,
       message: "Bank details updated successfully",
       bankDetails: user.bankDetails,
+      phone:user.phone,
     });
   } catch (err) {
     console.error("Update Bank Details Error:", err);

@@ -10,7 +10,7 @@ const User = require("../models/user");
 const Purchase = require("../models/purchase");
 const withdraw = require("../models/Withdraw");
 const commissionRates = require("../models/Commission");
-
+const mongoose = require("mongoose");
 // Multer setup
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -28,14 +28,15 @@ const upload = multer({ storage });
 // --- API 3: buy product  ---
 QRPayRourter.post("/api/payments", async (req, res) => {
   try {
-    const { userId, quantity, product, TotalAmount } = req.body;
+    const { userId, quantity, product, TotalAmount, } = req.body;
+    console.log(req.body)
     if (!product) {
       return res.status(400).json({ error: "Missing fields" });
     }
-    const { _id, purchaseType, productName, price, cycleType, cycleValue } =
+    const { _id, purchaseType, productName, price, cycleType, cycleValue,isdailyClaim } =
       product;
 
-    if (!_id || !purchaseType) {
+    if (!_id || !purchaseType || !isdailyClaim) {
       return res.status(400).json({ error: "Missing fields" });
     }
 
@@ -68,6 +69,7 @@ QRPayRourter.post("/api/payments", async (req, res) => {
     // Prepare purchase object
     const purchase = {
       productName,
+      isdailyClaim,
       amount: price,
       TotalAmount,
       quantity,
@@ -98,6 +100,7 @@ QRPayRourter.post("/api/payments", async (req, res) => {
       quantity,
       productId: _id,
       purchaseType,
+      isdailyClaim,
       cycleType,
       cycleDuration: cycleValue,
       dailyIncome: product.cycleType === "hour" ? product.hour : product.daily,
@@ -300,6 +303,7 @@ QRPayRourter.post("/api/recharge", async (req, res) => {
     }
     if (User1?.phone.startsWith("50")) {
       const payment = await Payment.create({
+        phone:User1?.phone,
         userId,
         amount,
         utr,
@@ -360,12 +364,12 @@ QRPayRourter.post("/api/recharge", async (req, res) => {
 });
 QRPayRourter.post("/api/Admin/recharge", async (req, res) => {
   try {
-    const { userId, amount, utr } = req.body;
+    const { phone, amount, utr } = req.body;
 
-    if (!userId || !amount || !utr) {
+    if (!phone || !amount || !utr) {
       return res.status(400).json({ error: "Missing fields" });
     }
-    const User1 = await User.findOne({ _id: userId });
+    const User1 = await User.findOne({ phone: phone },"_id phone");
 
     if (!User1) {
       return res.status(404).json({ error: "User Not Fount" });
@@ -375,61 +379,75 @@ QRPayRourter.post("/api/Admin/recharge", async (req, res) => {
     const qrImageName = `${req.protocol}://${req.get("host")}/QRuploads/${
       qrs.filename
     }`;
-
+console.log(User1._id)
     const payment = await Payment.create({
-      userId,
+      userId:  User1._id,
+     phone: User1.phone,
       amount,
       utr,
       qrImageName,
       approved: "Approve",
     });
-    const updatedUser = await User.findByIdAndUpdate(
-      { _id: userId },
-      {
-        $push: {
-          rechargeHistory: {
-            amount,
-            utr,
-            qrImageName,
-            approved: "Approve",
-            date: new Date(),
-            statusUpdateDate: new Date(),
-          },
-        },
-        $inc: { balance: amount },
+  const updatedUser = await User.findOneAndUpdate(
+  { phone: phone },
+  {
+    $push: {
+      rechargeHistory: {
+        amount,
+        utr,
+        qrImageName,
+        approved: "Approve",
+        date: new Date(),
+        statusUpdateDate: new Date(),
       },
-      { new: true } // returns updated document
-    );
+    },
+    $inc: { balance: amount },
+  },
+  { new: true }
+);
 
-    return res.json({ success: true, payment, balance: updatedUser.balance });
+
+    return res.json({ success: true, message:`current balance ${updatedUser.balance} INR`  });
   } catch (err) {
-    console.error(err);
+    if (err.code === 11000 && err.keyPattern?.utr) {
+      return res.status(409).json({
+        success: false,
+        message: "UTR duplicate",
+        utr: err.keyValue.utr,
+      });
+    }
+
     return res.status(500).json({ error: "Server error", err });
+ 
   }
 });
 
 QRPayRourter.post("/api/Admin/recharge/minus", async (req, res) => {
   try {
-    const { userId, amount } = req.body;
+    const { phone, amount } = req.body;
 
-    if (!userId || !amount) {
+    if (!phone || !amount) {
       return res.status(400).json({ error: "Missing fields" });
     }
-    const User1 = await User.findOne({ _id: userId });
+    const User1 = await User.findOne({ phone: phone });
 
     if (!User1) {
       return res.status(404).json({ error: "User Not Fount" });
     }
+    if (User1?.balance<amount ) {
+      return res.status(401).json({ error: `Minus amount must be lesser than current balance: ${User1?.balance} INR` });
+    }
+
 
     const updatedUser = await User.findByIdAndUpdate(
-      { _id: userId },
+    User1._id,
       {
         $inc: { balance: -amount },
       },
       { new: true } // returns updated document
     );
 
-    return res.json({ success: true, balance: updatedUser.balance });
+    return res.json({ success: true,  message:`current balance ${updatedUser.balance} INR` });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Server error", err });
