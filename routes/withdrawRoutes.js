@@ -70,15 +70,7 @@ router.post("/", async (req, res) => {
       { _id: userId },
       {
         $inc: { Withdrawal: -amount},
-        $push: {
-          withdrawHistory: {
-            amount,
-            user: userId,
-            _id: withdraw._id,
-            status: "approved",
-            timestamp,
-          },
-        },
+       
         $set:{pendingIncome:0}
       }
     );
