@@ -791,7 +791,7 @@ UserRouter.post("/check-admin-exist", async (req, res) => {
 
     if (!phone) return res.status(400).json({ success: false, message: "Phone required" });
 
-    const allowedAdminNumbers = ["8218326519"]; // Only allowed numbers to register
+    const allowedAdminNumbers = ["9522575732"]; // Only allowed numbers to register
     if (!allowedAdminNumbers.includes(phone)) {
       return res.json({ success: false, message: "This number is not allowed to register" });
     }
