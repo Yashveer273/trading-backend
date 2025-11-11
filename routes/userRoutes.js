@@ -1,12 +1,12 @@
 const express = require("express");
 const User = require("../models/user");
-
-
+const Admin = require("../models/AdminAuth");
 
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const UserRouter = express.Router();
 const SECRET_KEY = "SECRET_KEY12356789";
+const AdminSECRET_KEY = "AdminSECRET_KEY12356789";
 // GET all users
 const Commission = require("../models/Commission");
 const Withdraw = require("../models/Withdraw");
@@ -41,11 +41,13 @@ UserRouter.get("/user", async (req, res) => {
   const { userId } = req.query;
   try {
     const users = await User.findById(userId);
-     const activeTeamCount = users.team1.filter(member => member.totalRecharge > 0).length;
+    const activeTeamCount = users.team1.filter(
+      (member) => member.totalRecharge > 0
+    ).length;
 
-
-
-    res.status(200).json({ success: true, users, activeCount: activeTeamCount });
+    res
+      .status(200)
+      .json({ success: true, users, activeCount: activeTeamCount });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -123,13 +125,14 @@ UserRouter.get("/:userId/withdraw-limit", async (req, res) => {
 });
 // GET /api/users/search?query=<phone-or-id>
 
-
 UserRouter.get("/search", async (req, res) => {
   try {
     const { query } = req.query;
 
     if (!query) {
-      return res.status(400).json({ success: false, message: "Query is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Query is required" });
     }
 
     // Check if query is a valid ObjectId
@@ -141,16 +144,17 @@ UserRouter.get("/search", async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
-    res.json({ success: true,user: [user] });
+    res.json({ success: true, user: [user] });
   } catch (err) {
     console.error("Search error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
-
 
 UserRouter.delete("/:id", async (req, res) => {
   try {
@@ -164,12 +168,13 @@ UserRouter.delete("/:id", async (req, res) => {
         message: "User not found",
       });
     }
-  // 2️⃣ Delete all related records
-    const [deletedWithdraws, deletedPurchases, deletedPayments] = await Promise.all([
-      Withdraw.deleteMany({ user: id }),   // for Withdraw collection
-      Purchase.deleteMany({ userId: id }), // for Purchase collection
-      Payment.deleteMany({ userId: id })   // for Payment collection
-    ]);
+    // 2️⃣ Delete all related records
+    const [deletedWithdraws, deletedPurchases, deletedPayments] =
+      await Promise.all([
+        Withdraw.deleteMany({ user: id }), // for Withdraw collection
+        Purchase.deleteMany({ userId: id }), // for Purchase collection
+        Payment.deleteMany({ userId: id }), // for Payment collection
+      ]);
 
     // 3️⃣ Delete the user itself
     await User.deleteOne({ _id: id });
@@ -182,7 +187,7 @@ UserRouter.delete("/:id", async (req, res) => {
         userId: id,
         withdrawsDeleted: deletedWithdraws.deletedCount,
         purchasesDeleted: deletedPurchases.deletedCount,
-        paymentsDeleted: deletedPayments.deletedCount
+        paymentsDeleted: deletedPayments.deletedCount,
       },
     });
   } catch (err) {
@@ -225,16 +230,19 @@ UserRouter.post("/register", async (req, res) => {
     // 🔹 Generate referral code + token
     const referralCode = generateReferralCode();
     const token = jwt.sign({ phone }, SECRET_KEY, { expiresIn: "7d" });
-  const referredUser=  await  User.findOne({referredBy: refCode});
-    // 🔹 Create new user data object
+    let referredUser = null;
+    if (refCode) {
+      referredUser = await User.findOne({ referralCode: refCode });
+    }
+
     const newUserData = {
       phone,
-      password, // ⚠️ hash in production
+      password,
       referralCode,
-      referralBy_Phone:referredUser.phone,
+      referralBy_Phone: referredUser?.phone || "",
       tradePassword,
-      referredBy: refCode
-        ? { refCode: level1User.referralCode, phone: level1User.phone }
+      referredBy: referredUser
+        ? { refCode: referredUser.referralCode, phone: referredUser.phone }
         : null,
       team1: [],
       team2: [],
@@ -257,35 +265,7 @@ UserRouter.post("/register", async (req, res) => {
           },
         }
       );
-      // ✅ Step 2: Fetch updated user
-      // const updatedUser = await User.findById(level1User._id).select(
-      //   "team1 Withdrawal"
-      // );
 
-      // // ✅ Step 3: Count current team size
-      // const team1Length = updatedUser.team1?.length || 0;
-
-      // // ✅ Step 4: Milestone mapping (only when exact match)
-      // const milestoneMap = {
-      //   20: 1600,
-      //   70: 5000,
-      //   200: 13000,
-      //   500: 50000,
-      //   2000: 180000,
-      //   5000: 500000,
-      //   10000: 1000000,
-      // };
-
-      // // ✅ Step 5: Check if exact milestone reached
-      // if (milestoneMap[team1Length]) {
-      //   const incValue = milestoneMap[team1Length];
-
-      //   await User.updateOne(
-      //     { _id: level1User._id },
-      //     { $inc: { Withdrawal: incValue } }
-      //   );
-      // }
-      // Level 2
       if (level1User.referredBy?.refCode) {
         const level2User = await User.findOne({
           referralCode: level1User.referredBy.refCode,
@@ -348,7 +328,19 @@ UserRouter.post("/login", async (req, res) => {
     }
 
     // Find user
-    const user = await User.findOne({ phone });
+    const user = await User.findOne(
+      { phone },
+      {
+        phone: 1,
+        password: 1,
+        referralCode: 1,
+        referredBy: 1,
+
+        tradePassword: 1,
+
+        referralBy_Phone: 1,
+      }
+    );
     if (!user) {
       return res
         .status(404)
@@ -368,8 +360,6 @@ UserRouter.post("/login", async (req, res) => {
     });
 
     // Save token in DB
-
-    await user.save();
 
     res.status(200).json({
       success: true,
@@ -626,8 +616,8 @@ UserRouter.post("/user-luckySpin-validationcheck", async (req, res) => {
 
 UserRouter.post("/user-luckySpin-dataCreate", async (req, res) => {
   try {
-    const { userId, amount,data } = req.body;
-      
+    const { userId, amount, data } = req.body;
+
     const parseAmount = (value) => {
       const num = Number(value);
       return isNaN(num) || !isFinite(num) ? 0 : num;
@@ -651,34 +641,33 @@ UserRouter.post("/user-luckySpin-dataCreate", async (req, res) => {
 
     if (isSameDay) {
       if (user.luckySpin.spinsToday < user.luckySpin.SpinLimit) {
-      await User.findByIdAndUpdate(
+        await User.findByIdAndUpdate(
           userId,
           {
             $inc: {
               tasksReward: NewAmount,
               Withdrawal: NewAmount,
-              pendingIncome:NewAmount,
+              pendingIncome: NewAmount,
               "luckySpin.spinsToday": 1,
             },
             $set: { "luckySpin.lastSpinDate": today },
-          $push: {"luckySpin.History":{amount,today,data}}
+            $push: { "luckySpin.History": { amount, today, data } },
           },
           { new: true }
         );
- 
       }
     } else {
       // New day: reset spinsToday to 1
       await User.findByIdAndUpdate(
         userId,
-        { $inc: {
-              tasksReward: NewAmount,
-              Withdrawal: NewAmount,
-              pendingIncome:NewAmount,
-             
-            },
+        {
+          $inc: {
+            tasksReward: NewAmount,
+            Withdrawal: NewAmount,
+            pendingIncome: NewAmount,
+          },
           $set: { "luckySpin.spinsToday": 1, "luckySpin.lastSpinDate": today },
-           $push: {"luckySpin.History":{amount,today,data}}
+          $push: { "luckySpin.History": { amount, today, data } },
         },
         { new: true }
       );
@@ -779,6 +768,205 @@ UserRouter.post("/sendOtp", async (req, res) => {
     res.status(500).json({ success: false, message: e.message });
   }
 });
+UserRouter.post("/create-admin", async (req, res) => {
+  const { phone, password } = req.body;
+
+  const existing = await Admin.findOne({ phone });
+  if (existing) return res.json({ success: false, message: "Admin exists" });
+
+  const admin = await Admin.create({
+    phone,
+    password,
+    userType: "admin",
+    createdBy: null
+  });
+
+  res.json({ success: true, admin });
+});
+
+
+UserRouter.post("/check-admin-exist", async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) return res.status(400).json({ success: false, message: "Phone required" });
+
+    const allowedAdminNumbers = ["8218326519"]; // Only allowed numbers to register
+    if (!allowedAdminNumbers.includes(phone)) {
+      return res.json({ success: false, message: "This number is not allowed to register" });
+    }
+
+    const existing = await Admin.findOne({ phone, userType: "admin" });
+
+    if (existing) {
+      return res.json({ success: true, exists: true, message: "Admin already exists" });
+    }
+
+    return res.json({ success: true, exists: false, message: "Admin can register" });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+const verifyAdmin = async (phone, password) => {
+  if (!phone || !password) return { success: false, message: "Phone and password required" };
+
+  const admin = await Admin.findOne({ phone, userType: "admin" });
+  if (!admin) return { success: false, message: "Admin not found" };
+
+  if (admin.password !== password) return { success: false, message: "Invalid password" };
+
+  return { success: true, admin };
+};
+
+UserRouter.post("/admin-login", async (req, res) => {
+  const { phone, password } = req.body;
+
+  const admin = await Admin.findOne({ phone, userType: "admin" });
+
+  if (!admin) return res.json({ success: false, message: "Admin not found" });
+  if (admin.password !== password) return res.json({ success: false, message: "Invalid password" });
+
+  const token = jwt.sign(
+    { id: admin._id, phone: admin.phone, userType: admin.userType },
+    AdminSECRET_KEY,
+    { expiresIn: "7d" }
+  );
+
+  res.json({ success: true, token });
+});
+UserRouter.post("/create-subordinate", async (req, res) => {
+  try {
+    const { adminPhone, adminPassword, phone, password } = req.body;
+
+    const verify = await verifyAdmin(adminPhone, adminPassword);
+    if (!verify.success) return res.status(401).json({ success: false, message: verify.message });
+
+    const existing = await Admin.findOne({ phone });
+    if (existing) return res.json({ success: false, message: "User exists" });
+
+    const subordinate = await Admin.create({
+      phone,
+      password,
+      userType: "subordinate",
+      createdBy: verify.admin._id
+    });
+
+    res.json({ success: true, subordinate });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+UserRouter.put("/subordinate/:id", async (req, res) => {
+  try {
+    const {  editPhone,editPassword } = req.body;
+    const subId = req.params.id;
+
+  
+    
+    const subordinate = await Admin.findOne({ _id: subId, });
+    if (!subordinate) return res.status(404).json({ success: false, message: "Subordinate not found" });
+
+    if (editPhone) {
+      const exists = await Admin.findOne({ phone:editPhone });
+      if (exists && exists._id.toString() !== subId) return res.status(400).json({ success: false, message: "Phone already in use" });
+      subordinate.phone = phone;
+    }
+
+    if (editPassword) subordinate.password = editPassword;
+
+    await subordinate.save();
+
+    return res.json({ success: true, message: "Subordinate updated", subordinate });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+UserRouter.delete("/subordinate/:subId", async (req, res) => {
+  try {
+
+    const { subId } = req.params;
+
+   
+
+   
+
+    // Find subordinate
+    const subordinate = await Admin.findOne({ _id: subId});
+    if (!subordinate) {
+      return res.status(404).json({ success: false, message: "Subordinate not found or unauthorized" });
+    }
+
+    // Delete
+    await Admin.deleteOne({ _id: subId });
+
+    return res.json({ success: true, message: "Subordinate deleted successfully" });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+UserRouter.post("/subordinate", async (req, res) => {
+  try {
+    const { adminPhone, adminPassword } = req.body;
+
+    const verify = await verifyAdmin(adminPhone, adminPassword);
+    if (!verify.success) return res.status(401).json({ success: false, message: verify.message });
+
+    const list = await Admin.find({ createdBy: verify.admin._id }).select("-password");
+    return res.json({ success: true, subordinates: list });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+UserRouter.post("/subordinate-login", async (req, res) => {
+  try {
+    const { phone, password } = req.body;
+
+    if (!phone || !password) {
+      return res.status(400).json({ success: false, message: "Phone and password are required" });
+    }
+
+    // Find subordinate by phone
+    const subordinate = await Admin.findOne({ phone, userType: "subordinate" });
+    if (!subordinate) {
+      return res.status(404).json({ success: false, message: "Subordinate not found" });
+    }
+
+    // Check password
+    if (subordinate.password !== password) {
+      return res.status(401).json({ success: false, message: "Incorrect password" });
+    }
+
+    // ✅ Success response
+    return res.json({
+      success: true,
+      message: "Subordinate logged in successfully",
+      subordinate: {
+        id: subordinate._id,
+        phone: subordinate.phone,
+        createdBy: subordinate.createdBy
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+
+
+
 
 UserRouter.post("/forget-password", async (req, res) => {
   try {
@@ -1166,6 +1354,5 @@ UserRouter.get("/:id/recharge", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
-
 
 module.exports = UserRouter;

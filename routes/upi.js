@@ -53,9 +53,7 @@ router.get("/list", async (req, res) => {
   }
 });
 
-/**
- * ✅ 3. GET ONE UPI detail by RANDOM PICK
- */
+
 router.get("/random", async (req, res) => {
   try {
     const count = await UPIDetails.countDocuments();

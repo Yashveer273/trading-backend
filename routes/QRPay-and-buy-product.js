@@ -36,7 +36,7 @@ QRPayRourter.post("/api/payments", async (req, res) => {
     const { _id, purchaseType, productName, price, cycleType, cycleValue,isdailyClaim } =
       product;
 
-    if (!_id || !purchaseType || !isdailyClaim) {
+    if (!_id || !purchaseType ) {
       return res.status(400).json({ error: "Missing fields" });
     }
 
