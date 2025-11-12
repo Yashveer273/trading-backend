@@ -1251,6 +1251,40 @@ UserRouter.get("/:id/team", async (req, res) => {
 });
 
 // GET /api/users/:id/purchases?page=1&limit=10
+UserRouter.get("/purchasesData", async (req, res) => {
+  try {
+    const { phone } = req.query;
+    const { page = 1, limit = 10 } = req.query;
+    const start = (page - 1) * limit;
+
+    const user = await User.findOne( {phone:phone,
+      purchases: { $slice: [start, parseInt(limit)] },
+    });
+
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+
+    const total =
+      (
+        await User.aggregate([
+          { $match: { _id: user._id } },
+          { $project: { count: { $size: "$purchases" } } },
+        ])
+      )[0]?.count || 0;
+
+    res.json({
+      success: true,
+      currentPage: +page,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total,
+      purchases: user.purchases,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 UserRouter.get("/:id/purchases", async (req, res) => {
   try {
     const { id } = req.params;

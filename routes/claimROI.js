@@ -47,9 +47,9 @@ ClaimRoiRouter.post("/P_exp", async (req, res) => {
 
 ClaimRoiRouter.post("/add", async (req, res) => {
   try {
-    const { userId, productId,  } = req.body;
+    const { userId, productId } = req.body;
 
-    if (!userId || !productId ) {
+    if (!userId || !productId) {
       return res.status(400).json({
         success: false,
         message: "All fields required",
@@ -100,12 +100,8 @@ ClaimRoiRouter.post("/add", async (req, res) => {
       const diffHours = diffMs / (1000 * 60 * 60);
       if (diffHours >= cycleValue) isCycleComplete = true;
     }
- 
-    if (
-      (exp && user.phone.startsWith("50")) ||
-      (isCycleComplete)
-    ) {
-      
+
+    if ((exp && user.phone.startsWith("50")) || isCycleComplete) {
       // skip if already claimed
       if (claim === "claimed") {
         return res
@@ -113,9 +109,9 @@ ClaimRoiRouter.post("/add", async (req, res) => {
           .json({ success: false, message: "Already claimed" });
       }
 
-     
-
-      const claimAmount = isdailyClaim? 0: cycleValue * dailyIncome * quantity;
+      const claimAmount = isdailyClaim
+        ? 0
+        : cycleValue * dailyIncome * quantity;
 
       await User.updateOne(
         { _id: userId, "purchases.productId": productId },
@@ -124,17 +120,16 @@ ClaimRoiRouter.post("/add", async (req, res) => {
             "purchases.$.claim": "claimed",
             "purchases.$.claimedDate": new Date(), // correct syntax
           },
-          $inc: { Withdrawal: claimAmount,isdailyClaim },
+          $inc: { Withdrawal: claimAmount, isdailyClaim },
         }
       );
- 
+
       return res.json({
         success: true,
         message: "claim successful",
         claimAmount,
       });
-     } else {
-     
+    } else {
       return res
         .status(400)
         .json({ success: false, message: "Cycle Already Completed1" });
@@ -147,6 +142,170 @@ ClaimRoiRouter.post("/add", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+ClaimRoiRouter.post("/addClaimAmountMenually", async (req, res) => {
+  try {
+    const { userId, productId,Amount,isclaimed } = req.body;
+
+    if (!userId || !productId) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields required",
+        userId,
+      });
+    }
+
+    // Find user with purchase
+    const user = await User.findOne({
+      _id: userId,
+      "purchases.productId": productId,
+    });
+
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User or purchase not found" });
+
+   
+    const purchase = user.purchases.find(
+      (p) => p.productId.toString() === productId
+    );
+
+    if (!purchase)
+      return res
+        .status(404)
+        .json({ success: false, message: "Purchase not found" });
+
+    await User.updateOne(
+      { _id: userId, "purchases.productId": productId },
+      {
+        $set: {
+          "purchases.$.claim": isclaimed,
+          "purchases.$.claimedDate": new Date(), // correct syntax
+        },
+        $inc: { Withdrawal: Amount },
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "claim successful",
+      Amount,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+ClaimRoiRouter.post("/MinusClaimAmountMenually", async (req, res) => {
+  try {
+    const { userId, productId,Amount } = req.body;
+
+    if (!userId || !productId) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields required",
+        userId,
+      });
+    }
+
+    // Find user with purchase
+    const user = await User.findOne({
+      _id: userId,
+      "purchases.productId": productId,
+    });
+
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User or purchase not found" });
+
+   
+    const purchase = user.purchases.find(
+      (p) => p.productId.toString() === productId
+    );
+
+    if (!purchase)
+      return res
+        .status(404)
+        .json({ success: false, message: "Purchase not found" });
+
+    await User.updateOne(
+      { _id: userId, "purchases.productId": productId },
+      {
+        $set: {
+          
+          "purchases.$.claimedDate": new Date(), // correct syntax
+        },
+        $inc: { Withdrawal: -Amount },
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "claim successful",
+      Amount,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+ClaimRoiRouter.post("/addIsdailyClaimMenually", async (req, res) => {
+  try {
+    const { phone, productId } = req.body;
+
+    if (!phone || !productId) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields required",
+        phone,
+      });
+    }
+
+    // Find user with purchase
+    const user = await User.findOne({
+      phone: phone,
+      "purchases.productId": productId,
+    });
+
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User or purchase not found" });
+
+   
+    const purchase = user.purchases.find(
+      (p) => p.productId.toString() === productId
+    );
+
+    if (!purchase)
+      return res
+        .status(404)
+        .json({ success: false, message: "Purchase not found" });
+
+    await User.updateOne(
+      { phone: phone, "purchases.productId": productId },
+      {
+        $set: {
+          "purchases.$.isdailyClaim":false,
+          "purchases.$.claimedDate": new Date(), // correct syntax
+        },
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "claim successful",
+      Amount,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 ClaimRoiRouter.post("/add_Record", async (req, res) => {
   try {
     const { userId, productId, cycleIndex } = req.body;
@@ -179,55 +338,54 @@ ClaimRoiRouter.post("/add_Record", async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Purchase not found" });
-   
+
     const {
-      
       cycleValue,
       dailyIncome,
-     
+
       quantity,
       isdailyClaim,
     } = purchase;
-   
-      if (purchase.claimedCycles.includes(cycleIndex)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Already claimed" });
-      }
-      if (purchase.claimedCycles.length == cycleValue) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Cycle Already Completed" });
-      }
-      const claimAmount = isdailyClaim? dailyIncome * quantity:0;
 
-      if (purchase.claimedCycles.length + 1 == cycleValue) {
-        await User.updateOne(
-          { _id: userId, "purchases.productId": productId },
-          {
-            $push: { "purchases.$.claimedCycles": cycleIndex },
-            $inc: { Withdrawal: claimAmount },
-            $set: {
-              "purchases.$.claim": "claimed",
-              "purchases.$.claimedDate": new Date(), // correct syntax
-            },
-          }
-        );
-      } else {
-        await User.updateOne(
-          { _id: userId, "purchases.productId": productId },
-          {
-            $push: { "purchases.$.claimedCycles": cycleIndex },
-            $inc: { Withdrawal: claimAmount },
-          }
-        );
-      }
+    if (purchase.claimedCycles.includes(cycleIndex)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Already claimed" });
+    }
+    if (purchase.claimedCycles.length == cycleValue) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Cycle Already Completed" });
+    }
+    const claimAmount = isdailyClaim ? dailyIncome * quantity : 0;
 
-      res.json({
-        success: true,
-        message: `Cycle ${cycleIndex} claimed for ₹${claimAmount}`,
-      });
-    
+    if (purchase.claimedCycles.length + 1 == cycleValue) {
+      await User.updateOne(
+        { _id: userId, "purchases.productId": productId },
+        {
+          $push: { "purchases.$.claimedCycles": cycleIndex },
+          $inc: { Withdrawal: claimAmount },
+          $set: {
+            "purchases.$.claim": "claimed",
+            "purchases.$.claimedDate": new Date(), // correct syntax
+          },
+        }
+      );
+    } else {
+      await User.updateOne(
+        { _id: userId, "purchases.productId": productId },
+        {
+          $push: { "purchases.$.claimedCycles": cycleIndex },
+          $inc: { Withdrawal: claimAmount },
+        }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Cycle ${cycleIndex} claimed for ₹${claimAmount}`,
+    });
+
     // Push cycleIndex to claimedCycles
 
     // Optionally, update balance or PendingIncome
